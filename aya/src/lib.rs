@@ -40,6 +40,7 @@
 #![deny(missing_docs)]
 
 mod bpf;
+pub mod features;
 mod kernel_features;
 pub mod maps;
 pub mod pin;
@@ -47,6 +48,8 @@ pub mod programs;
 pub mod sys;
 #[cfg(feature = "test-helpers")]
 pub mod test_helpers;
+#[cfg(target_os = "linux")]
+pub mod token;
 pub mod util;
 
 use std::os::fd::{AsFd, AsRawFd, BorrowedFd, FromRawFd, OwnedFd, RawFd};

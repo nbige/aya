@@ -11,7 +11,7 @@ use std::{
 };
 
 use crate::{
-    kernel_features::{FEATURES, Feature},
+    features::Features,
     programs::{
         FdLink, Link, PerfLink, PerfLinkIdInner, PerfLinkInner, ProgramData, ProgramError,
         attach_bpf_link, attach_perf_event, id_as_key, trace_point::read_sys_fs_trace_point_id,
@@ -74,12 +74,13 @@ impl ManyProbeLinks {
         prog_fd: BorrowedFd<'_>,
         args: ProbeEventArgs<P::AttachTarget<'_>>,
         cookie: Option<u64>,
+        features: &Features,
     ) -> Result<(), ProgramError> {
         // The first attached point selected this variant, so subsequent points can use the same
         // fd-backed or perf-backed path directly without repeating backend selection.
         match self {
             Self::Fd(links) => {
-                let link = attach_bpf_probe::<P>(prog_fd, args, cookie)?;
+                let link = attach_bpf_probe::<P>(prog_fd, args, cookie, features)?;
                 links.push(link);
             }
             Self::PerfLink(links) => {
@@ -303,7 +304,7 @@ pub(crate) fn attach<P: Probe, T: Link + From<PerfLinkInner>>(
     // Use debugfs to create probe
     let prog_fd = program_data.fd()?;
     let prog_fd = prog_fd.as_fd();
-    let link = attach_impl::<P>(prog_fd, args, cookie)?;
+    let link = attach_impl::<P>(prog_fd, args, cookie, &program_data.features)?;
     program_data.links.insert(T::from(link))
 }
 
@@ -311,9 +312,10 @@ pub(crate) fn attach_impl<P: Probe>(
     prog_fd: BorrowedFd<'_>,
     args: ProbeEventArgs<P::AttachTarget<'_>>,
     cookie: Option<u64>,
+    features: &Features,
 ) -> Result<PerfLinkInner, ProgramError> {
-    if probe_pmu_supported() && FEATURES.is_supported(Feature::BpfPerfLink) {
-        attach_bpf_probe::<P>(prog_fd, args, cookie).map(PerfLinkInner::Fd)
+    if probe_pmu_supported() && features.bpf_perf_link() {
+        attach_bpf_probe::<P>(prog_fd, args, cookie, features).map(PerfLinkInner::Fd)
     } else {
         attach_perf_event_probe::<P>(prog_fd, args, cookie).map(PerfLinkInner::PerfLink)
     }
@@ -323,9 +325,10 @@ fn attach_bpf_probe<P: Probe>(
     prog_fd: BorrowedFd<'_>,
     args: ProbeEventArgs<P::AttachTarget<'_>>,
     cookie: Option<u64>,
+    features: &Features,
 ) -> Result<FdLink, ProgramError> {
     let perf_fd = create_as_probe::<P>(args)?;
-    attach_bpf_link(prog_fd, perf_fd, cookie)
+    attach_bpf_link(prog_fd, perf_fd, cookie, features)
 }
 
 fn attach_perf_event_probe<P: Probe>(

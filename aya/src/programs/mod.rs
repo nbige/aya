@@ -130,6 +130,7 @@ pub use crate::programs::{
 };
 use crate::{
     VerifierLogLevel,
+    features::Features,
     maps::MapError,
     pin::PinError,
     programs::{
@@ -160,6 +161,10 @@ pub enum ProgramError {
     /// The program is not loaded.
     #[error("the program is not loaded")]
     NotLoaded,
+
+    /// Token-backed program loading has been permanently finalized.
+    #[error("token-backed program loading has been finalized")]
+    TokenLoadingFinalized,
 
     /// The program is already attached.
     #[error("the program was already attached")]
@@ -404,6 +409,40 @@ impl Program {
         }
     }
 
+    pub(crate) fn finalize_token_loading(&mut self) {
+        match self {
+            Self::KProbe(program) => program.data.finalize_token_loading(),
+            Self::UProbe(program) => program.data.finalize_token_loading(),
+            Self::TracePoint(program) => program.data.finalize_token_loading(),
+            Self::SocketFilter(program) => program.data.finalize_token_loading(),
+            Self::ReusePortSocketFilter(program) => program.data.finalize_token_loading(),
+            Self::Xdp(program) => program.data.finalize_token_loading(),
+            Self::SkMsg(program) => program.data.finalize_token_loading(),
+            Self::SkSkb(program) => program.data.finalize_token_loading(),
+            Self::CgroupSockAddr(program) => program.data.finalize_token_loading(),
+            Self::SockOps(program) => program.data.finalize_token_loading(),
+            Self::SchedClassifier(program) => program.data.finalize_token_loading(),
+            Self::CgroupSkb(program) => program.data.finalize_token_loading(),
+            Self::CgroupSysctl(program) => program.data.finalize_token_loading(),
+            Self::CgroupSockopt(program) => program.data.finalize_token_loading(),
+            Self::LircMode2(program) => program.data.finalize_token_loading(),
+            Self::PerfEvent(program) => program.data.finalize_token_loading(),
+            Self::RawTracePoint(program) => program.data.finalize_token_loading(),
+            Self::Lsm(program) => program.data.finalize_token_loading(),
+            Self::LsmCgroup(program) => program.data.finalize_token_loading(),
+            Self::BtfTracePoint(program) => program.data.finalize_token_loading(),
+            Self::FEntry(program) => program.data.finalize_token_loading(),
+            Self::FExit(program) => program.data.finalize_token_loading(),
+            Self::FlowDissector(program) => program.data.finalize_token_loading(),
+            Self::Extension(program) => program.data.finalize_token_loading(),
+            Self::SkLookup(program) => program.data.finalize_token_loading(),
+            Self::SkReuseport(program) => program.data.finalize_token_loading(),
+            Self::CgroupSock(program) => program.data.finalize_token_loading(),
+            Self::CgroupDevice(program) => program.data.finalize_token_loading(),
+            Self::Iter(program) => program.data.finalize_token_loading(),
+        }
+    }
+
     /// Pin the program to the provided path
     pub fn pin<P: AsRef<Path>>(&mut self, path: P) -> Result<(), PinError> {
         match self {
@@ -560,6 +599,9 @@ pub(crate) struct ProgramData<T: Link> {
     pub(crate) attach_btf_id: Option<u32>,
     pub(crate) attach_prog_fd: Option<ProgramFd>,
     pub(crate) btf_fd: Option<Arc<crate::MockableFd>>,
+    pub(crate) token_fd: Option<Arc<crate::MockableFd>>,
+    pub(crate) token_loading_finalized: bool,
+    pub(crate) features: Features,
     pub(crate) verifier_log_level: VerifierLogLevel,
     pub(crate) path: Option<PathBuf>,
     pub(crate) flags: u32,
@@ -571,6 +613,8 @@ impl<T: Link> ProgramData<T> {
         obj: (aya_obj::Program, aya_obj::Function),
         btf_fd: Option<Arc<crate::MockableFd>>,
         verifier_log_level: VerifierLogLevel,
+        token_fd: Option<Arc<crate::MockableFd>>,
+        features: Features,
     ) -> Self {
         Self {
             name,
@@ -581,6 +625,9 @@ impl<T: Link> ProgramData<T> {
             attach_btf_id: None,
             attach_prog_fd: None,
             btf_fd,
+            token_fd,
+            token_loading_finalized: false,
+            features,
             verifier_log_level,
             path: None,
             flags: 0,
@@ -593,6 +640,8 @@ impl<T: Link> ProgramData<T> {
         path: &Path,
         info: bpf_prog_info,
         verifier_log_level: VerifierLogLevel,
+        token_fd: Option<Arc<crate::MockableFd>>,
+        features: Features,
     ) -> Result<Self, ProgramError> {
         let attach_btf_id = (info.attach_btf_id > 0).then_some(info.attach_btf_id);
         let attach_btf_obj_fd = (info.attach_btf_obj_id != 0)
@@ -608,6 +657,9 @@ impl<T: Link> ProgramData<T> {
             attach_btf_id,
             attach_prog_fd: None,
             btf_fd: None,
+            token_fd,
+            token_loading_finalized: false,
+            features,
             verifier_log_level,
             path: Some(path.to_path_buf()),
             flags: 0,
@@ -629,13 +681,33 @@ impl<T: Link> ProgramData<T> {
 
         let info = ProgramInfo::new_from_fd(fd.as_fd())?;
         let name = info.name_as_str().map(ToOwned::to_owned).map(Into::into);
-        Self::from_bpf_prog_info(name, fd, path.as_ref(), info.0, verifier_log_level)
+        Self::from_bpf_prog_info(
+            name,
+            fd,
+            path.as_ref(),
+            info.0,
+            verifier_log_level,
+            None,
+            Features::ambient_cached(),
+        )
     }
 }
 
 impl<T: Link> ProgramData<T> {
     fn fd(&self) -> Result<&ProgramFd, ProgramError> {
         self.fd.as_ref().ok_or(ProgramError::NotLoaded)
+    }
+
+    const fn ensure_can_load(&self) -> Result<(), ProgramError> {
+        if self.token_loading_finalized && self.fd.is_none() {
+            return Err(ProgramError::TokenLoadingFinalized);
+        }
+        Ok(())
+    }
+
+    fn finalize_token_loading(&mut self) {
+        self.token_fd = None;
+        self.token_loading_finalized = true;
     }
 }
 
@@ -711,6 +783,7 @@ fn load_program<T: Link>(
     expected_attach_type: Option<bpf_attach_type>,
     data: &mut ProgramData<T>,
 ) -> Result<(), ProgramError> {
+    data.ensure_can_load()?;
     let ProgramData {
         name,
         obj,
@@ -720,6 +793,9 @@ fn load_program<T: Link>(
         attach_btf_id,
         attach_prog_fd,
         btf_fd,
+        token_fd,
+        token_loading_finalized: _,
+        features: _,
         verifier_log_level,
         path: _,
         flags,
@@ -778,6 +854,7 @@ fn load_program<T: Link>(
         line_info_rec_size: *line_info_rec_size,
         line_info: line_info.clone(),
         flags: *flags,
+        token_fd: token_fd.as_ref().map(|f| f.as_fd()),
     };
 
     let (ret, verifier_log) = retry_with_verifier_logs(10, |logger| {
@@ -1381,6 +1458,8 @@ macro_rules! impl_from_prog_info {
                         Path::new(""),
                         bpf_program_info,
                         VerifierLogLevel::default(),
+                        None,
+                        Features::ambient_cached(),
                     )?,
                     $($var,)?
                     $($extra_field: $extra_value,)*
