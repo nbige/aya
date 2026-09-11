@@ -988,7 +988,7 @@ impl MapData {
     /// determines behavior such as [`CpuMap`](crate::maps::xdp::CpuMap) and
     /// [`DevMap`](crate::maps::xdp::DevMap) prog-id support.
     pub fn from_id_with_token(id: u32, token_fd: BorrowedFd<'_>) -> Result<Self, MapError> {
-        let features = crate::sys::detect_features_with_token(token_fd);
+        let features = crate::sys::detect_features_with_token(token_fd)?;
         Self::from_id_inner(id, features)
     }
 

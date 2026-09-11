@@ -6,7 +6,7 @@
 //! ([`Features::detect_with_token`]); because a token's capabilities are fixed for its lifetime,
 //! the snapshot is computed once per load and reused for every map and program it creates.
 
-use std::{os::fd::BorrowedFd, sync::LazyLock};
+use std::{io, os::fd::BorrowedFd, sync::LazyLock};
 
 use aya_obj::btf::BtfFeature;
 
@@ -15,8 +15,9 @@ use crate::{
     programs::ProgramType,
     sys::{
         BpfHelper, is_bpf_global_data_supported_inner, is_bpf_name_supported_inner,
-        is_btf_feature_supported_inner, is_btf_supported_inner, is_cpumap_prog_id_supported_inner,
-        is_devmap_prog_id_supported_inner, is_helper_supported_inner, is_perf_link_supported_inner,
+        is_btf_feature_supported_inner_result, is_btf_supported_inner,
+        is_cpumap_prog_id_supported_inner, is_devmap_prog_id_supported_inner,
+        is_helper_supported_inner, is_perf_link_supported_inner,
     },
 };
 
@@ -139,44 +140,55 @@ impl Features {
     /// Unlike the ambient set, this always performs a fresh probe: the token's capabilities are
     /// not known ahead of time and are not shared with the process-ambient cache. Callers that
     /// load multiple items with the same token should probe once and reuse the result.
-    pub(crate) fn detect_with_token(token_fd: BorrowedFd<'_>) -> Self {
+    ///
+    /// Each underlying probe already distinguishes "the kernel does not support this feature"
+    /// (mapped to `Ok(false)`) from a genuine syscall failure such as the token not delegating
+    /// the probe's own program or map type (kept as `Err`, typically `EPERM`/`EACCES`). Only the
+    /// former may be folded into `false` here; the latter is propagated so a permission error
+    /// during probing cannot be silently misread as an unsupported feature and, downstream,
+    /// cause maps or programs to be dropped from a load that a fuller probe would have accepted.
+    pub(crate) fn detect_with_token(token_fd: BorrowedFd<'_>) -> io::Result<Self> {
         let token_fd = Some(token_fd);
-        let btf = is_btf_supported_inner(token_fd)
-            .unwrap_or(false)
-            .then(|| BtfCapabilities {
-                func: is_btf_feature_supported_inner(BtfFeature::Func, token_fd),
-                func_global: is_btf_feature_supported_inner(BtfFeature::FuncGlobal, token_fd),
-                datasec: is_btf_feature_supported_inner(BtfFeature::DataSec, token_fd),
-                datasec_zero: is_btf_feature_supported_inner(BtfFeature::DataSecZero, token_fd),
-                float: is_btf_feature_supported_inner(BtfFeature::Float, token_fd),
-                decl_tag: is_btf_feature_supported_inner(BtfFeature::DeclTag, token_fd),
-                type_tag: is_btf_feature_supported_inner(BtfFeature::TypeTag, token_fd),
-                enum64: is_btf_feature_supported_inner(BtfFeature::Enum64, token_fd),
-            });
-        Self {
-            bpf_name: is_bpf_name_supported_inner(token_fd).unwrap_or(false),
-            bpf_probe_read_kernel: matches!(
-                is_helper_supported_inner(
-                    ProgramType::TracePoint,
-                    BpfHelper::BPF_FUNC_probe_read_kernel,
+        let btf = if is_btf_supported_inner(token_fd)? {
+            Some(BtfCapabilities {
+                func: is_btf_feature_supported_inner_result(BtfFeature::Func, token_fd)?,
+                func_global: is_btf_feature_supported_inner_result(
+                    BtfFeature::FuncGlobal,
                     token_fd,
-                ),
-                Ok(true)
-            ),
-            bpf_perf_link: is_perf_link_supported_inner(token_fd).unwrap_or(false),
-            bpf_global_data: is_bpf_global_data_supported_inner(token_fd).unwrap_or(false),
-            bpf_cookie: matches!(
-                is_helper_supported_inner(
-                    ProgramType::KProbe,
-                    BpfHelper::BPF_FUNC_get_attach_cookie,
+                )?,
+                datasec: is_btf_feature_supported_inner_result(BtfFeature::DataSec, token_fd)?,
+                datasec_zero: is_btf_feature_supported_inner_result(
+                    BtfFeature::DataSecZero,
                     token_fd,
-                ),
-                Ok(true)
-            ),
-            cpumap_prog_id: is_cpumap_prog_id_supported_inner(token_fd).unwrap_or(false),
-            devmap_prog_id: is_devmap_prog_id_supported_inner(token_fd).unwrap_or(false),
+                )?,
+                float: is_btf_feature_supported_inner_result(BtfFeature::Float, token_fd)?,
+                decl_tag: is_btf_feature_supported_inner_result(BtfFeature::DeclTag, token_fd)?,
+                type_tag: is_btf_feature_supported_inner_result(BtfFeature::TypeTag, token_fd)?,
+                enum64: is_btf_feature_supported_inner_result(BtfFeature::Enum64, token_fd)?,
+            })
+        } else {
+            None
+        };
+        Ok(Self {
+            bpf_name: is_bpf_name_supported_inner(token_fd)?,
+            bpf_probe_read_kernel: is_helper_supported_inner(
+                ProgramType::TracePoint,
+                BpfHelper::BPF_FUNC_probe_read_kernel,
+                token_fd,
+            )
+            .map_err(io::Error::other)?,
+            bpf_perf_link: is_perf_link_supported_inner(token_fd)?,
+            bpf_global_data: is_bpf_global_data_supported_inner(token_fd)?,
+            bpf_cookie: is_helper_supported_inner(
+                ProgramType::KProbe,
+                BpfHelper::BPF_FUNC_get_attach_cookie,
+                token_fd,
+            )
+            .map_err(io::Error::other)?,
+            cpumap_prog_id: is_cpumap_prog_id_supported_inner(token_fd)?,
+            devmap_prog_id: is_devmap_prog_id_supported_inner(token_fd)?,
             btf,
-        }
+        })
     }
 
     /// Returns whether BPF program names and map names are supported.
@@ -217,5 +229,50 @@ impl Features {
     /// If BTF is supported, returns which BTF features are supported.
     pub const fn btf(&self) -> Option<&BtfCapabilities> {
         self.btf.as_ref()
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use std::os::fd::BorrowedFd;
+
+    use aya_obj::generated::{bpf_cmd, bpf_prog_type};
+
+    use super::Features;
+    use crate::sys::{Syscall, override_syscall};
+
+    const TOKEN_FD: std::os::fd::RawFd = 42;
+
+    /// A token that does not delegate `BPF_PROG_TYPE_SOCKET_FILTER` causes
+    /// [`crate::sys::bpf::probe_bpf_global_data`]'s own program load to fail with a permission
+    /// error unrelated to whether the kernel supports global data. `detect_with_token` must
+    /// surface that as an error rather than folding it into `bpf_global_data: false`, which
+    /// would silently disable a feature the kernel and token both actually support.
+    #[test]
+    fn detect_with_token_propagates_permission_error_instead_of_marking_unsupported() {
+        override_syscall(|call| match call {
+            Syscall::Ebpf {
+                cmd: bpf_cmd::BPF_MAP_CREATE,
+                ..
+            } => Ok(crate::MockableFd::mock_signed_fd().into()),
+            Syscall::Ebpf {
+                cmd: bpf_cmd::BPF_PROG_LOAD,
+                attr,
+            } => {
+                let u = unsafe { attr.__bindgen_anon_3 };
+                if u.prog_type == bpf_prog_type::BPF_PROG_TYPE_SOCKET_FILTER as u32 {
+                    Err((-1, std::io::Error::from_raw_os_error(libc::EPERM)))
+                } else {
+                    Err((-1, std::io::Error::from_raw_os_error(libc::EINVAL)))
+                }
+            }
+            Syscall::Ebpf { .. } => Err((-1, std::io::Error::from_raw_os_error(libc::EINVAL))),
+            unexpected => panic!("unexpected syscall: {unexpected:?}"),
+        });
+
+        // SAFETY: TOKEN_FD is used only as an opaque integer by the mocked syscall.
+        let token_fd = unsafe { BorrowedFd::borrow_raw(TOKEN_FD) };
+        let error = Features::detect_with_token(token_fd).unwrap_err();
+        assert_eq!(error.raw_os_error(), Some(libc::EPERM));
     }
 }
