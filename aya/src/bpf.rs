@@ -13,11 +13,11 @@ use aya_obj::{
     generated::{BPF_F_SLEEPABLE, BPF_F_XDP_HAS_FRAGS, bpf_map_type},
     relocation::EbpfRelocationError,
 };
-use log::warn;
+use log::{debug, warn};
 use thiserror::Error;
 
 use crate::{
-    kernel_features::{FEATURES, Feature},
+    features::Features,
     maps::{Map, MapData, MapError},
     programs::{
         BtfTracePoint, CgroupDevice, CgroupSkb, CgroupSock, CgroupSockAddr, CgroupSockopt,
@@ -29,6 +29,10 @@ use crate::{
     sys::{bpf_load_btf, retry_with_verifier_logs},
     util::{bytes_of, bytes_of_slice, nr_cpus, page_size},
 };
+
+#[cfg(test)]
+#[path = "bpf/tests.rs"]
+mod token_loader_tests;
 
 /// Marker trait for types that can safely be converted to and from byte slices.
 ///
@@ -52,6 +56,21 @@ unsafe_impl_pod!(i8, u8, i16, u16, i32, u32, i64, u64, u128, i128);
 unsafe impl<T: Pod, const N: usize> Pod for [T; N] {}
 
 pub use aya_obj::maps::{PinningType, bpf_map_def};
+
+static FEATURES_CACHE: std::sync::LazyLock<Features> =
+    std::sync::LazyLock::new(Features::ambient_cached);
+
+/// Returns a reference to the process-ambient detected BPF features.
+pub fn features() -> &'static Features {
+    &FEATURES_CACHE
+}
+
+#[derive(Debug)]
+enum FeatureSelection {
+    Default,
+    TokenDetect(Arc<crate::MockableFd>),
+    TokenProvided(Arc<crate::MockableFd>, Features),
+}
 
 /// Builder style API for advanced loading of eBPF programs.
 ///
@@ -86,6 +105,7 @@ pub struct EbpfLoader<'a> {
     extensions: HashSet<&'a str>,
     verifier_log_level: VerifierLogLevel,
     allow_unsupported_maps: bool,
+    feature_selection: FeatureSelection,
 }
 
 #[derive(Debug)]
@@ -153,6 +173,7 @@ impl<'a> EbpfLoader<'a> {
             extensions: HashSet::new(),
             verifier_log_level: VerifierLogLevel::default(),
             allow_unsupported_maps: false,
+            feature_selection: FeatureSelection::Default,
         }
     }
 
@@ -246,6 +267,87 @@ impl<'a> EbpfLoader<'a> {
     pub const fn allow_unsupported_maps(&mut self) -> &mut Self {
         self.allow_unsupported_maps = true;
         self
+    }
+
+    /// Sets a BPF token for unprivileged BPF operations.
+    ///
+    /// When a token is set, feature detection and all BPF syscalls (map creation,
+    /// program loading, BTF loading) will use the token for privilege delegation.
+    ///
+    /// # Minimum kernel version
+    ///
+    /// BPF tokens require Linux 6.9 or later.
+    ///
+    /// # Example
+    ///
+    /// ```no_run
+    /// use aya::EbpfLoader;
+    /// use aya::token::BpfToken;
+    ///
+    /// let token = BpfToken::create("/sys/fs/bpf")?;
+    /// let bpf = EbpfLoader::new()
+    ///     .token(&token)?
+    ///     .load_file("file.o")?;
+    /// # Ok::<(), Box<dyn std::error::Error>>(())
+    /// ```
+    #[cfg(target_os = "linux")]
+    pub fn token(&mut self, token: &crate::token::BpfToken) -> Result<&mut Self, EbpfError> {
+        self.configure_token(token, None)
+    }
+
+    /// Sets a BPF token and caller-supplied kernel features.
+    ///
+    /// Unlike [`Self::token`], this mode performs no token-backed feature probes.
+    /// The caller must supply features detected before privilege reduction and
+    /// restricted to the delegated map and program types.
+    ///
+    /// # Errors
+    ///
+    /// Returns an error if token feature selection was already configured or
+    /// the token descriptor cannot be duplicated.
+    #[cfg(target_os = "linux")]
+    pub fn token_with_features(
+        &mut self,
+        token: &crate::token::BpfToken,
+        features: Features,
+    ) -> Result<&mut Self, EbpfError> {
+        self.configure_token(token, Some(features))
+    }
+
+    #[cfg(target_os = "linux")]
+    fn configure_token(
+        &mut self,
+        token: &crate::token::BpfToken,
+        features: Option<Features>,
+    ) -> Result<&mut Self, EbpfError> {
+        if !matches!(self.feature_selection, FeatureSelection::Default) {
+            return Err(EbpfError::TokenFeatureSelectionConflict);
+        }
+        let fd = token
+            .as_fd()
+            .try_clone_to_owned()
+            .map_err(|error| EbpfError::TokenFdClone { error })?;
+        let fd = Arc::new(crate::MockableFd::from_fd(fd));
+        self.feature_selection = match features {
+            Some(features) => FeatureSelection::TokenProvided(fd, features),
+            None => FeatureSelection::TokenDetect(fd),
+        };
+        Ok(self)
+    }
+
+    fn selected_features(&self) -> (Features, Option<Arc<crate::MockableFd>>) {
+        match &self.feature_selection {
+            FeatureSelection::Default => (Features::ambient_cached(), None),
+            FeatureSelection::TokenDetect(token) => {
+                use crate::sys::detect_features_with_token;
+                let features = detect_features_with_token(token.as_fd());
+                debug!("BPF Feature Detection (with token): {features:#?}");
+                (features, Some(Arc::clone(token)))
+            }
+            FeatureSelection::TokenProvided(token, features) => {
+                (features.clone(), Some(Arc::clone(token)))
+            }
+        }
     }
 
     /// Sets the base directory path for pinned maps.
@@ -448,6 +550,12 @@ impl<'a> EbpfLoader<'a> {
     /// # Ok::<(), aya::EbpfError>(())
     /// ```
     pub fn load(&mut self, data: &[u8]) -> Result<Ebpf, EbpfError> {
+        let (features, token) = self.selected_features();
+        let token_loading = if token.is_some() {
+            TokenLoadingState::Active
+        } else {
+            TokenLoadingState::Unavailable
+        };
         let Self {
             btf,
             default_map_pin_directory,
@@ -457,16 +565,20 @@ impl<'a> EbpfLoader<'a> {
             verifier_log_level,
             allow_unsupported_maps,
             map_pin_path_by_name,
+            feature_selection: _,
         } = self;
+
+        let token_fd = token.as_ref().map(|t| t.as_fd());
+
         let mut obj = Object::parse(data)?;
         obj.patch_map_data(globals.clone())?;
 
         let btf_fd = if let Some(btf) = obj.fixup_and_sanitize_btf(|| {
-            FEATURES
+            features
                 .btf()
-                .map(|features| move |feature| features.is_supported(feature))
+                .map(|btf_caps| move |feature| btf_caps.is_supported(feature))
         })? {
-            match load_btf(btf.to_bytes(), *verifier_log_level) {
+            match load_btf(btf.to_bytes(), *verifier_log_level, token_fd) {
                 Ok(btf_fd) => Some(Arc::new(btf_fd)),
                 // Only report an error here if the BTF is truly needed, otherwise proceed without.
                 Err(err) => {
@@ -584,10 +696,8 @@ impl<'a> EbpfLoader<'a> {
         let mut maps_of_maps: Vec<(String, aya_obj::Map)> = Vec::new();
 
         for (name, map_obj) in obj.maps.drain() {
-            if matches!(
-                map_obj.section_kind(),
-                EbpfSectionKind::Bss | EbpfSectionKind::Data | EbpfSectionKind::Rodata
-            ) && !FEATURES.is_supported(Feature::BpfGlobalData)
+            if let (false, EbpfSectionKind::Bss | EbpfSectionKind::Data | EbpfSectionKind::Rodata) =
+                (features.bpf_global_data(), map_obj.section_kind())
             {
                 continue;
             }
@@ -623,7 +733,7 @@ impl<'a> EbpfLoader<'a> {
             )? {
                 map_obj.set_max_entries(max_entries_val)
             }
-            if let Some(value_size) = value_size_override(map_type) {
+            if let Some(value_size) = value_size_override(map_type, &features) {
                 map_obj.set_value_size(value_size)
             }
 
@@ -640,19 +750,39 @@ impl<'a> EbpfLoader<'a> {
                 None
             };
             let mut map = if let Some(pin_path) = map_pin_path_by_name.get(name.as_str()) {
-                MapData::create_pinned_by_name(pin_path, map_obj, &name, btf_fd, inner_map_obj)?
+                MapData::create_pinned_by_name(
+                    pin_path,
+                    map_obj,
+                    &name,
+                    btf_fd,
+                    inner_map_obj,
+                    token_fd,
+                    features.clone(),
+                )?
             } else {
                 match map_obj.pinning() {
                     PinningType::None => {
                         let btf_inner_map;
                         let inner_map_fd = if let Some(inner) = inner_map_obj {
-                            btf_inner_map =
-                                MapData::create(inner, &format!("{name}.inner"), btf_fd)?;
+                            btf_inner_map = MapData::create(
+                                inner,
+                                &format!("{name}.inner"),
+                                btf_fd,
+                                token_fd,
+                                features.clone(),
+                            )?;
                             Some(btf_inner_map.fd().as_fd())
                         } else {
                             None
                         };
-                        MapData::create_with_inner_map_fd(map_obj, &name, btf_fd, inner_map_fd)?
+                        MapData::create_with_inner_map_fd(
+                            map_obj,
+                            &name,
+                            btf_fd,
+                            inner_map_fd,
+                            token_fd,
+                            features.clone(),
+                        )?
                     }
                     PinningType::ByName => {
                         // pin maps in /sys/fs/bpf by default to align with libbpf
@@ -662,7 +792,15 @@ impl<'a> EbpfLoader<'a> {
                             .unwrap_or_else(|| Path::new("/sys/fs/bpf"));
                         let path = path.join(&name);
 
-                        MapData::create_pinned_by_name(path, map_obj, &name, btf_fd, inner_map_obj)?
+                        MapData::create_pinned_by_name(
+                            path,
+                            map_obj,
+                            &name,
+                            btf_fd,
+                            inner_map_obj,
+                            token_fd,
+                            features.clone(),
+                        )?
                     }
                 }
             };
@@ -685,7 +823,7 @@ impl<'a> EbpfLoader<'a> {
         obj.relocate_externs()?;
 
         obj.relocate_calls(&text_sections)?;
-        obj.sanitize_functions(|| FEATURES.is_supported(Feature::BpfProbeReadKernel));
+        obj.sanitize_functions(|| features.bpf_probe_read_kernel());
 
         let programs = obj
             .programs
@@ -693,30 +831,41 @@ impl<'a> EbpfLoader<'a> {
             .map(|(name, prog_obj)| {
                 let function_obj = obj.functions[&prog_obj.function_key()].clone();
 
-                let prog_name = FEATURES
-                    .is_supported(Feature::BpfName)
-                    .then(|| name.clone().into());
+                let prog_name = features.bpf_name().then(|| name.clone().into());
                 let section = prog_obj.section.clone();
                 let obj = (prog_obj, function_obj);
 
                 let btf_fd = btf_fd.as_ref().map(Arc::clone);
+                // `ProgramData` is generic over the link type, so this cannot be a
+                // closure. Exactly one of the arms below expands it.
+                macro_rules! program_data {
+                    () => {
+                        ProgramData::new(
+                            prog_name,
+                            obj,
+                            btf_fd,
+                            *verifier_log_level,
+                            token.clone(),
+                            features.clone(),
+                        )
+                    };
+                }
                 let program = if extensions.contains(name.as_str()) {
                     Program::Extension(Extension {
-                        data: ProgramData::new(prog_name, obj, btf_fd, *verifier_log_level),
+                        data: program_data!(),
                     })
                 } else {
                     match &section {
                         ProgramSection::KProbe => Program::KProbe(KProbe {
-                            data: ProgramData::new(prog_name, obj, btf_fd, *verifier_log_level),
+                            data: program_data!(),
                             kind: ProbeKind::Entry,
                         }),
                         ProgramSection::KRetProbe => Program::KProbe(KProbe {
-                            data: ProgramData::new(prog_name, obj, btf_fd, *verifier_log_level),
+                            data: program_data!(),
                             kind: ProbeKind::Return,
                         }),
                         ProgramSection::UProbe { sleepable, multi } => {
-                            let mut data =
-                                ProgramData::new(prog_name, obj, btf_fd, *verifier_log_level);
+                            let mut data = program_data!();
                             if *sleepable {
                                 data.flags = BPF_F_SLEEPABLE;
                             }
@@ -731,8 +880,7 @@ impl<'a> EbpfLoader<'a> {
                             })
                         }
                         ProgramSection::URetProbe { sleepable, multi } => {
-                            let mut data =
-                                ProgramData::new(prog_name, obj, btf_fd, *verifier_log_level);
+                            let mut data = program_data!();
                             if *sleepable {
                                 data.flags = BPF_F_SLEEPABLE;
                             }
@@ -747,16 +895,15 @@ impl<'a> EbpfLoader<'a> {
                             })
                         }
                         ProgramSection::TracePoint => Program::TracePoint(TracePoint {
-                            data: ProgramData::new(prog_name, obj, btf_fd, *verifier_log_level),
+                            data: program_data!(),
                         }),
                         ProgramSection::SocketFilter => Program::SocketFilter(SocketFilter {
-                            data: ProgramData::new(prog_name, obj, btf_fd, *verifier_log_level),
+                            data: program_data!(),
                         }),
                         ProgramSection::Xdp {
                             frags, attach_type, ..
                         } => {
-                            let mut data =
-                                ProgramData::new(prog_name, obj, btf_fd, *verifier_log_level);
+                            let mut data = program_data!();
                             if *frags {
                                 data.flags = BPF_F_XDP_HAS_FRAGS;
                             }
@@ -766,107 +913,103 @@ impl<'a> EbpfLoader<'a> {
                             })
                         }
                         ProgramSection::SkMsg => Program::SkMsg(SkMsg {
-                            data: ProgramData::new(prog_name, obj, btf_fd, *verifier_log_level),
+                            data: program_data!(),
                         }),
                         ProgramSection::CgroupSysctl => Program::CgroupSysctl(CgroupSysctl {
-                            data: ProgramData::new(prog_name, obj, btf_fd, *verifier_log_level),
+                            data: program_data!(),
                         }),
                         ProgramSection::CgroupSockopt { attach_type, .. } => {
                             Program::CgroupSockopt(CgroupSockopt {
-                                data: ProgramData::new(prog_name, obj, btf_fd, *verifier_log_level),
+                                data: program_data!(),
                                 attach_type: *attach_type,
                             })
                         }
                         ProgramSection::SkSkbStream { kind } => Program::SkSkb(SkSkb {
-                            data: ProgramData::new(prog_name, obj, btf_fd, *verifier_log_level),
+                            data: program_data!(),
                             kind: *kind,
                         }),
                         ProgramSection::SockOps => Program::SockOps(SockOps {
-                            data: ProgramData::new(prog_name, obj, btf_fd, *verifier_log_level),
+                            data: program_data!(),
                         }),
                         ProgramSection::SchedClassifier => {
                             Program::SchedClassifier(SchedClassifier {
-                                data: ProgramData::new(prog_name, obj, btf_fd, *verifier_log_level),
+                                data: program_data!(),
                             })
                         }
                         ProgramSection::CgroupSkb { attach_type } => {
                             Program::CgroupSkb(CgroupSkb {
-                                data: ProgramData::new(prog_name, obj, btf_fd, *verifier_log_level),
+                                data: program_data!(),
                                 attach_type: *attach_type,
                             })
                         }
                         ProgramSection::CgroupSockAddr { attach_type, .. } => {
                             Program::CgroupSockAddr(CgroupSockAddr {
-                                data: ProgramData::new(prog_name, obj, btf_fd, *verifier_log_level),
+                                data: program_data!(),
                                 attach_type: *attach_type,
                             })
                         }
                         ProgramSection::LircMode2 => Program::LircMode2(LircMode2 {
-                            data: ProgramData::new(prog_name, obj, btf_fd, *verifier_log_level),
+                            data: program_data!(),
                         }),
                         ProgramSection::PerfEvent => Program::PerfEvent(PerfEvent {
-                            data: ProgramData::new(prog_name, obj, btf_fd, *verifier_log_level),
+                            data: program_data!(),
                         }),
                         ProgramSection::RawTracePoint => Program::RawTracePoint(RawTracePoint {
-                            data: ProgramData::new(prog_name, obj, btf_fd, *verifier_log_level),
+                            data: program_data!(),
                         }),
                         ProgramSection::Lsm { sleepable } => {
-                            let mut data =
-                                ProgramData::new(prog_name, obj, btf_fd, *verifier_log_level);
+                            let mut data = program_data!();
                             if *sleepable {
                                 data.flags = BPF_F_SLEEPABLE;
                             }
                             Program::Lsm(Lsm { data })
                         }
                         ProgramSection::LsmCgroup => Program::LsmCgroup(LsmCgroup {
-                            data: ProgramData::new(prog_name, obj, btf_fd, *verifier_log_level),
+                            data: program_data!(),
                         }),
                         ProgramSection::BtfTracePoint => Program::BtfTracePoint(BtfTracePoint {
-                            data: ProgramData::new(prog_name, obj, btf_fd, *verifier_log_level),
+                            data: program_data!(),
                         }),
                         ProgramSection::FEntry { sleepable } => {
-                            let mut data =
-                                ProgramData::new(prog_name, obj, btf_fd, *verifier_log_level);
+                            let mut data = program_data!();
                             if *sleepable {
                                 data.flags = BPF_F_SLEEPABLE;
                             }
                             Program::FEntry(FEntry { data })
                         }
                         ProgramSection::FExit { sleepable } => {
-                            let mut data =
-                                ProgramData::new(prog_name, obj, btf_fd, *verifier_log_level);
+                            let mut data = program_data!();
                             if *sleepable {
                                 data.flags = BPF_F_SLEEPABLE;
                             }
                             Program::FExit(FExit { data })
                         }
                         ProgramSection::FlowDissector => Program::FlowDissector(FlowDissector {
-                            data: ProgramData::new(prog_name, obj, btf_fd, *verifier_log_level),
+                            data: program_data!(),
                         }),
                         ProgramSection::Extension => Program::Extension(Extension {
-                            data: ProgramData::new(prog_name, obj, btf_fd, *verifier_log_level),
+                            data: program_data!(),
                         }),
                         ProgramSection::SkLookup => Program::SkLookup(SkLookup {
-                            data: ProgramData::new(prog_name, obj, btf_fd, *verifier_log_level),
+                            data: program_data!(),
                         }),
                         ProgramSection::SkReuseport { attach_type } => {
                             Program::SkReuseport(SkReuseport {
-                                data: ProgramData::new(prog_name, obj, btf_fd, *verifier_log_level),
+                                data: program_data!(),
                                 attach_type: *attach_type,
                             })
                         }
                         ProgramSection::CgroupSock { attach_type, .. } => {
                             Program::CgroupSock(CgroupSock {
-                                data: ProgramData::new(prog_name, obj, btf_fd, *verifier_log_level),
+                                data: program_data!(),
                                 attach_type: *attach_type,
                             })
                         }
                         ProgramSection::CgroupDevice => Program::CgroupDevice(CgroupDevice {
-                            data: ProgramData::new(prog_name, obj, btf_fd, *verifier_log_level),
+                            data: program_data!(),
                         }),
                         ProgramSection::Iter { sleepable } => {
-                            let mut data =
-                                ProgramData::new(prog_name, obj, btf_fd, *verifier_log_level);
+                            let mut data = program_data!();
                             if *sleepable {
                                 data.flags = BPF_F_SLEEPABLE;
                             }
@@ -882,7 +1025,11 @@ impl<'a> EbpfLoader<'a> {
             .map(|data| parse_map(data, *allow_unsupported_maps))
             .collect::<Result<HashMap<String, Map>, EbpfError>>()?;
 
-        Ok(Ebpf { maps, programs })
+        Ok(Ebpf {
+            maps,
+            programs,
+            token_loading,
+        })
     }
 }
 
@@ -960,21 +1107,11 @@ fn max_entries_override(
 
 /// Computes the value which should be used to override the `value_size` value of the map
 /// based on the rules for that map type.
-fn value_size_override(map_type: bpf_map_type) -> Option<u32> {
+const fn value_size_override(map_type: bpf_map_type, features: &Features) -> Option<u32> {
     match map_type {
-        bpf_map_type::BPF_MAP_TYPE_CPUMAP => {
-            Some(if FEATURES.is_supported(Feature::CpuMapProgId) {
-                8
-            } else {
-                4
-            })
-        }
+        bpf_map_type::BPF_MAP_TYPE_CPUMAP => Some(if features.cpumap_prog_id() { 8 } else { 4 }),
         bpf_map_type::BPF_MAP_TYPE_DEVMAP | bpf_map_type::BPF_MAP_TYPE_DEVMAP_HASH => {
-            Some(if FEATURES.is_supported(Feature::DevMapProgId) {
-                8
-            } else {
-                4
-            })
+            Some(if features.devmap_prog_id() { 8 } else { 4 })
         }
         bpf_map_type::BPF_MAP_TYPE_RINGBUF => Some(0),
         _ => None,
@@ -1083,11 +1220,19 @@ impl Default for EbpfLoader<'_> {
     }
 }
 
+#[derive(Debug)]
+enum TokenLoadingState {
+    Unavailable,
+    Active,
+    Finalized,
+}
+
 /// The main entry point into the library, used to work with eBPF programs and maps.
 #[derive(Debug)]
 pub struct Ebpf {
     maps: HashMap<String, Map>,
     programs: HashMap<String, Program>,
+    token_loading: TokenLoadingState,
 }
 
 /// The main entry point into the library, used to work with eBPF programs and maps.
@@ -1095,6 +1240,61 @@ pub struct Ebpf {
 pub type Bpf = Ebpf;
 
 impl Ebpf {
+    /// Permanently finalizes token-backed loading for the selected programs.
+    ///
+    /// Every selected name must exist and already be loaded, and no loaded
+    /// program may be omitted. On success, token references are removed from
+    /// every program. Any unloaded program then rejects future load attempts
+    /// before issuing a BPF syscall; already loaded objects remain usable.
+    ///
+    /// # Errors
+    ///
+    /// Returns an error when the object was not token-loaded, loading was
+    /// already finalized, or the selected set does not exactly match the
+    /// loaded programs.
+    #[cfg(target_os = "linux")]
+    pub fn finalize_token_loading<I, S>(
+        &mut self,
+        selected_program_names: I,
+    ) -> Result<(), EbpfError>
+    where
+        I: IntoIterator<Item = S>,
+        S: AsRef<str>,
+    {
+        match self.token_loading {
+            TokenLoadingState::Unavailable => return Err(EbpfError::TokenLoadingUnavailable),
+            TokenLoadingState::Finalized => {
+                return Err(EbpfError::TokenLoadingAlreadyFinalized);
+            }
+            TokenLoadingState::Active => {}
+        }
+
+        let selected: HashSet<String> = selected_program_names
+            .into_iter()
+            .map(|name| name.as_ref().to_owned())
+            .collect();
+        for name in &selected {
+            let program = self
+                .programs
+                .get(name)
+                .ok_or_else(|| EbpfError::SelectedProgramNotFound { name: name.clone() })?;
+            if program.fd().is_err() {
+                return Err(EbpfError::SelectedProgramNotLoaded { name: name.clone() });
+            }
+        }
+        for (name, program) in &self.programs {
+            if !selected.contains(name) && program.fd().is_ok() {
+                return Err(EbpfError::UnselectedProgramLoaded { name: name.clone() });
+            }
+        }
+
+        for program in self.programs.values_mut() {
+            program.finalize_token_loading();
+        }
+        self.token_loading = TokenLoadingState::Finalized;
+        Ok(())
+    }
+
     /// Loads eBPF bytecode from a file.
     ///
     /// Parses the given object code file and initializes the [maps](crate::maps) defined in it. If
@@ -1334,6 +1534,47 @@ impl Ebpf {
 /// The error type returned by [`Ebpf::load_file`] and [`Ebpf::load`].
 #[derive(Debug, Error)]
 pub enum EbpfError {
+    /// The BPF token descriptor could not be duplicated for the loader.
+    #[error("failed to clone BPF token file descriptor")]
+    TokenFdClone {
+        #[source]
+        /// The original [`io::Error`].
+        error: io::Error,
+    },
+
+    /// Token feature selection was configured more than once.
+    #[error("BPF token feature selection is already configured")]
+    TokenFeatureSelectionConflict,
+
+    /// Token loading is unavailable because the object was loaded without a token.
+    #[error("the eBPF object was loaded without a BPF token")]
+    TokenLoadingUnavailable,
+
+    /// Token loading was already permanently finalized.
+    #[error("token-backed program loading is already finalized")]
+    TokenLoadingAlreadyFinalized,
+
+    /// A selected program name does not exist in the object.
+    #[error("selected program `{name}` does not exist")]
+    SelectedProgramNotFound {
+        /// The selected program name.
+        name: String,
+    },
+
+    /// A selected program has not been loaded.
+    #[error("selected program `{name}` is not loaded")]
+    SelectedProgramNotLoaded {
+        /// The selected program name.
+        name: String,
+    },
+
+    /// A loaded program was omitted from the selected set.
+    #[error("loaded program `{name}` is not in the selected set")]
+    UnselectedProgramLoaded {
+        /// The loaded program name.
+        name: String,
+    },
+
     /// Error loading file
     #[error("error loading {path}")]
     FileError {
@@ -1395,9 +1636,10 @@ pub type BpfError = EbpfError;
 fn load_btf(
     raw_btf: Vec<u8>,
     verifier_log_level: VerifierLogLevel,
+    token_fd: Option<std::os::fd::BorrowedFd<'_>>,
 ) -> Result<crate::MockableFd, BtfError> {
     let (ret, verifier_log) = retry_with_verifier_logs(10, |logger| {
-        bpf_load_btf(raw_btf.as_slice(), logger, verifier_log_level)
+        bpf_load_btf(raw_btf.as_slice(), logger, verifier_log_level, token_fd)
     });
     ret.map_err(|io_error| BtfError::LoadError {
         io_error,

@@ -78,6 +78,7 @@ impl Extension {
     /// the main entry point of your program with an extension.
     pub fn load(&mut self, program: ProgramFd, func_name: &str) -> Result<(), ProgramError> {
         let Self { data } = self;
+        data.ensure_can_load()?;
         let (btf_fd, btf_id) = get_btf_info(program.as_fd(), func_name)?;
 
         data.attach_btf_obj_fd = Some(btf_fd);

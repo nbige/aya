@@ -4,6 +4,54 @@ pub use aya::BtfError
 pub use aya::Endianness
 pub use aya::PinningType
 pub use aya::bpf_map_def
+pub mod aya::features
+pub struct aya::features::BtfCapabilities
+impl aya::features::BtfCapabilities
+pub const fn aya::features::BtfCapabilities::is_supported(&self, aya_obj::btf::btf::BtfFeature) -> bool
+impl core::clone::Clone for aya::features::BtfCapabilities
+pub fn aya::features::BtfCapabilities::clone(&self) -> aya::features::BtfCapabilities
+impl core::cmp::Eq for aya::features::BtfCapabilities
+impl core::cmp::PartialEq for aya::features::BtfCapabilities
+pub fn aya::features::BtfCapabilities::eq(&self, &aya::features::BtfCapabilities) -> bool
+impl core::default::Default for aya::features::BtfCapabilities
+pub fn aya::features::BtfCapabilities::default() -> aya::features::BtfCapabilities
+impl core::fmt::Debug for aya::features::BtfCapabilities
+pub fn aya::features::BtfCapabilities::fmt(&self, &mut core::fmt::Formatter<'_>) -> core::fmt::Result
+impl core::marker::StructuralPartialEq for aya::features::BtfCapabilities
+impl core::marker::Freeze for aya::features::BtfCapabilities
+impl core::marker::Send for aya::features::BtfCapabilities
+impl core::marker::Sync for aya::features::BtfCapabilities
+impl core::marker::Unpin for aya::features::BtfCapabilities
+impl core::marker::UnsafeUnpin for aya::features::BtfCapabilities
+impl core::panic::unwind_safe::RefUnwindSafe for aya::features::BtfCapabilities
+impl core::panic::unwind_safe::UnwindSafe for aya::features::BtfCapabilities
+pub struct aya::features::Features
+impl aya::features::Features
+pub const fn aya::features::Features::bpf_cookie(&self) -> bool
+pub const fn aya::features::Features::bpf_global_data(&self) -> bool
+pub const fn aya::features::Features::bpf_name(&self) -> bool
+pub const fn aya::features::Features::bpf_perf_link(&self) -> bool
+pub const fn aya::features::Features::bpf_probe_read_kernel(&self) -> bool
+pub const fn aya::features::Features::btf(&self) -> core::option::Option<&aya::features::BtfCapabilities>
+pub const fn aya::features::Features::cpumap_prog_id(&self) -> bool
+pub const fn aya::features::Features::devmap_prog_id(&self) -> bool
+impl core::clone::Clone for aya::features::Features
+pub fn aya::features::Features::clone(&self) -> aya::features::Features
+impl core::cmp::Eq for aya::features::Features
+impl core::cmp::PartialEq for aya::features::Features
+pub fn aya::features::Features::eq(&self, &aya::features::Features) -> bool
+impl core::default::Default for aya::features::Features
+pub fn aya::features::Features::default() -> aya::features::Features
+impl core::fmt::Debug for aya::features::Features
+pub fn aya::features::Features::fmt(&self, &mut core::fmt::Formatter<'_>) -> core::fmt::Result
+impl core::marker::StructuralPartialEq for aya::features::Features
+impl core::marker::Freeze for aya::features::Features
+impl core::marker::Send for aya::features::Features
+impl core::marker::Sync for aya::features::Features
+impl core::marker::Unpin for aya::features::Features
+impl core::marker::UnsafeUnpin for aya::features::Features
+impl core::panic::unwind_safe::RefUnwindSafe for aya::features::Features
+impl core::panic::unwind_safe::UnwindSafe for aya::features::Features
 pub mod aya::maps
 pub mod aya::maps::array
 pub struct aya::maps::array::Array<T, V: aya::Pod>
@@ -29,13 +77,13 @@ pub fn aya::maps::array::Array<T, V>::map(&self) -> &aya::maps::MapData
 impl<V: aya::Pod> core::convert::TryFrom<aya::maps::Map> for aya::maps::array::Array<aya::maps::MapData, V>
 pub type aya::maps::array::Array<aya::maps::MapData, V>::Error = aya::maps::MapError
 pub fn aya::maps::array::Array<aya::maps::MapData, V>::try_from(aya::maps::Map) -> core::result::Result<Self, Self::Error>
-impl<T, V> core::marker::Freeze for aya::maps::array::Array<T, V> where T: core::marker::Freeze, core::marker::PhantomData<V>: core::marker::Freeze
-impl<T, V> core::marker::Send for aya::maps::array::Array<T, V> where T: core::marker::Send, core::marker::PhantomData<V>: core::marker::Send
-impl<T, V> core::marker::Sync for aya::maps::array::Array<T, V> where T: core::marker::Sync, core::marker::PhantomData<V>: core::marker::Sync
-impl<T, V> core::marker::Unpin for aya::maps::array::Array<T, V> where T: core::marker::Unpin, core::marker::PhantomData<V>: core::marker::Unpin
-impl<T, V> core::marker::UnsafeUnpin for aya::maps::array::Array<T, V> where T: core::marker::UnsafeUnpin, core::marker::PhantomData<V>: core::marker::UnsafeUnpin
-impl<T, V> core::panic::unwind_safe::RefUnwindSafe for aya::maps::array::Array<T, V> where T: core::panic::unwind_safe::RefUnwindSafe, core::marker::PhantomData<V>: core::panic::unwind_safe::RefUnwindSafe
-impl<T, V> core::panic::unwind_safe::UnwindSafe for aya::maps::array::Array<T, V> where T: core::panic::unwind_safe::UnwindSafe, core::marker::PhantomData<V>: core::panic::unwind_safe::UnwindSafe
+impl<T, V> core::marker::Freeze for aya::maps::array::Array<T, V> where T: core::marker::Freeze
+impl<T, V> core::marker::Send for aya::maps::array::Array<T, V> where T: core::marker::Send, V: core::marker::Send
+impl<T, V> core::marker::Sync for aya::maps::array::Array<T, V> where T: core::marker::Sync, V: core::marker::Sync
+impl<T, V> core::marker::Unpin for aya::maps::array::Array<T, V> where T: core::marker::Unpin, V: core::marker::Unpin
+impl<T, V> core::marker::UnsafeUnpin for aya::maps::array::Array<T, V> where T: core::marker::UnsafeUnpin
+impl<T, V> core::panic::unwind_safe::RefUnwindSafe for aya::maps::array::Array<T, V> where T: core::panic::unwind_safe::RefUnwindSafe, V: core::panic::unwind_safe::RefUnwindSafe
+impl<T, V> core::panic::unwind_safe::UnwindSafe for aya::maps::array::Array<T, V> where T: core::panic::unwind_safe::UnwindSafe, V: core::panic::unwind_safe::UnwindSafe
 pub struct aya::maps::array::CgroupArray<T>
 impl<T: core::borrow::Borrow<aya::maps::MapData>> aya::maps::CgroupArray<T>
 pub fn aya::maps::CgroupArray<T>::len(&self) -> u32
@@ -83,13 +131,13 @@ pub fn aya::maps::PerCpuArray<T, V>::map(&self) -> &aya::maps::MapData
 impl<V: aya::Pod> core::convert::TryFrom<aya::maps::Map> for aya::maps::PerCpuArray<aya::maps::MapData, V>
 pub type aya::maps::PerCpuArray<aya::maps::MapData, V>::Error = aya::maps::MapError
 pub fn aya::maps::PerCpuArray<aya::maps::MapData, V>::try_from(aya::maps::Map) -> core::result::Result<Self, Self::Error>
-impl<T, V> core::marker::Freeze for aya::maps::PerCpuArray<T, V> where T: core::marker::Freeze, core::marker::PhantomData<V>: core::marker::Freeze
-impl<T, V> core::marker::Send for aya::maps::PerCpuArray<T, V> where T: core::marker::Send, core::marker::PhantomData<V>: core::marker::Send
-impl<T, V> core::marker::Sync for aya::maps::PerCpuArray<T, V> where T: core::marker::Sync, core::marker::PhantomData<V>: core::marker::Sync
-impl<T, V> core::marker::Unpin for aya::maps::PerCpuArray<T, V> where T: core::marker::Unpin, core::marker::PhantomData<V>: core::marker::Unpin
-impl<T, V> core::marker::UnsafeUnpin for aya::maps::PerCpuArray<T, V> where T: core::marker::UnsafeUnpin, core::marker::PhantomData<V>: core::marker::UnsafeUnpin
-impl<T, V> core::panic::unwind_safe::RefUnwindSafe for aya::maps::PerCpuArray<T, V> where T: core::panic::unwind_safe::RefUnwindSafe, core::marker::PhantomData<V>: core::panic::unwind_safe::RefUnwindSafe
-impl<T, V> core::panic::unwind_safe::UnwindSafe for aya::maps::PerCpuArray<T, V> where T: core::panic::unwind_safe::UnwindSafe, core::marker::PhantomData<V>: core::panic::unwind_safe::UnwindSafe
+impl<T, V> core::marker::Freeze for aya::maps::PerCpuArray<T, V> where T: core::marker::Freeze
+impl<T, V> core::marker::Send for aya::maps::PerCpuArray<T, V> where T: core::marker::Send, V: core::marker::Send
+impl<T, V> core::marker::Sync for aya::maps::PerCpuArray<T, V> where T: core::marker::Sync, V: core::marker::Sync
+impl<T, V> core::marker::Unpin for aya::maps::PerCpuArray<T, V> where T: core::marker::Unpin, V: core::marker::Unpin
+impl<T, V> core::marker::UnsafeUnpin for aya::maps::PerCpuArray<T, V> where T: core::marker::UnsafeUnpin
+impl<T, V> core::panic::unwind_safe::RefUnwindSafe for aya::maps::PerCpuArray<T, V> where T: core::panic::unwind_safe::RefUnwindSafe, V: core::panic::unwind_safe::RefUnwindSafe
+impl<T, V> core::panic::unwind_safe::UnwindSafe for aya::maps::PerCpuArray<T, V> where T: core::panic::unwind_safe::UnwindSafe, V: core::panic::unwind_safe::UnwindSafe
 pub struct aya::maps::array::ProgramArray<T>
 impl<T: core::borrow::Borrow<aya::maps::MapData>> aya::maps::ProgramArray<T>
 pub fn aya::maps::ProgramArray<T>::indices(&self) -> aya::maps::MapKeys<'_, u32>
@@ -135,13 +183,13 @@ pub fn aya::maps::bloom_filter::BloomFilter<T, V>::fmt(&self, &mut core::fmt::Fo
 impl<V: aya::Pod> core::convert::TryFrom<aya::maps::Map> for aya::maps::bloom_filter::BloomFilter<aya::maps::MapData, V>
 pub type aya::maps::bloom_filter::BloomFilter<aya::maps::MapData, V>::Error = aya::maps::MapError
 pub fn aya::maps::bloom_filter::BloomFilter<aya::maps::MapData, V>::try_from(aya::maps::Map) -> core::result::Result<Self, Self::Error>
-impl<T, V> core::marker::Freeze for aya::maps::bloom_filter::BloomFilter<T, V> where T: core::marker::Freeze, core::marker::PhantomData<V>: core::marker::Freeze
-impl<T, V> core::marker::Send for aya::maps::bloom_filter::BloomFilter<T, V> where T: core::marker::Send, core::marker::PhantomData<V>: core::marker::Send
-impl<T, V> core::marker::Sync for aya::maps::bloom_filter::BloomFilter<T, V> where T: core::marker::Sync, core::marker::PhantomData<V>: core::marker::Sync
-impl<T, V> core::marker::Unpin for aya::maps::bloom_filter::BloomFilter<T, V> where T: core::marker::Unpin, core::marker::PhantomData<V>: core::marker::Unpin
-impl<T, V> core::marker::UnsafeUnpin for aya::maps::bloom_filter::BloomFilter<T, V> where T: core::marker::UnsafeUnpin, core::marker::PhantomData<V>: core::marker::UnsafeUnpin
-impl<T, V> core::panic::unwind_safe::RefUnwindSafe for aya::maps::bloom_filter::BloomFilter<T, V> where T: core::panic::unwind_safe::RefUnwindSafe, core::marker::PhantomData<V>: core::panic::unwind_safe::RefUnwindSafe
-impl<T, V> core::panic::unwind_safe::UnwindSafe for aya::maps::bloom_filter::BloomFilter<T, V> where T: core::panic::unwind_safe::UnwindSafe, core::marker::PhantomData<V>: core::panic::unwind_safe::UnwindSafe
+impl<T, V> core::marker::Freeze for aya::maps::bloom_filter::BloomFilter<T, V> where T: core::marker::Freeze
+impl<T, V> core::marker::Send for aya::maps::bloom_filter::BloomFilter<T, V> where T: core::marker::Send, V: core::marker::Send
+impl<T, V> core::marker::Sync for aya::maps::bloom_filter::BloomFilter<T, V> where T: core::marker::Sync, V: core::marker::Sync
+impl<T, V> core::marker::Unpin for aya::maps::bloom_filter::BloomFilter<T, V> where T: core::marker::Unpin, V: core::marker::Unpin
+impl<T, V> core::marker::UnsafeUnpin for aya::maps::bloom_filter::BloomFilter<T, V> where T: core::marker::UnsafeUnpin
+impl<T, V> core::panic::unwind_safe::RefUnwindSafe for aya::maps::bloom_filter::BloomFilter<T, V> where T: core::panic::unwind_safe::RefUnwindSafe, V: core::panic::unwind_safe::RefUnwindSafe
+impl<T, V> core::panic::unwind_safe::UnwindSafe for aya::maps::bloom_filter::BloomFilter<T, V> where T: core::panic::unwind_safe::UnwindSafe, V: core::panic::unwind_safe::UnwindSafe
 pub mod aya::maps::cgroup_storage
 pub struct aya::maps::cgroup_storage::CgroupStorage<T, V: aya::Pod>
 impl<T: core::borrow::Borrow<aya::maps::MapData>, V: aya::Pod> aya::maps::cgroup_storage::CgroupStorage<T, V>
@@ -161,13 +209,13 @@ pub fn aya::maps::cgroup_storage::CgroupStorage<T, V>::fmt(&self, &mut core::fmt
 impl<V: aya::Pod> core::convert::TryFrom<aya::maps::Map> for aya::maps::cgroup_storage::CgroupStorage<aya::maps::MapData, V>
 pub type aya::maps::cgroup_storage::CgroupStorage<aya::maps::MapData, V>::Error = aya::maps::MapError
 pub fn aya::maps::cgroup_storage::CgroupStorage<aya::maps::MapData, V>::try_from(aya::maps::Map) -> core::result::Result<Self, Self::Error>
-impl<T, V> core::marker::Freeze for aya::maps::cgroup_storage::CgroupStorage<T, V> where T: core::marker::Freeze, core::marker::PhantomData<V>: core::marker::Freeze
-impl<T, V> core::marker::Send for aya::maps::cgroup_storage::CgroupStorage<T, V> where T: core::marker::Send, core::marker::PhantomData<V>: core::marker::Send
-impl<T, V> core::marker::Sync for aya::maps::cgroup_storage::CgroupStorage<T, V> where T: core::marker::Sync, core::marker::PhantomData<V>: core::marker::Sync
-impl<T, V> core::marker::Unpin for aya::maps::cgroup_storage::CgroupStorage<T, V> where T: core::marker::Unpin, core::marker::PhantomData<V>: core::marker::Unpin
-impl<T, V> core::marker::UnsafeUnpin for aya::maps::cgroup_storage::CgroupStorage<T, V> where T: core::marker::UnsafeUnpin, core::marker::PhantomData<V>: core::marker::UnsafeUnpin
-impl<T, V> core::panic::unwind_safe::RefUnwindSafe for aya::maps::cgroup_storage::CgroupStorage<T, V> where T: core::panic::unwind_safe::RefUnwindSafe, core::marker::PhantomData<V>: core::panic::unwind_safe::RefUnwindSafe
-impl<T, V> core::panic::unwind_safe::UnwindSafe for aya::maps::cgroup_storage::CgroupStorage<T, V> where T: core::panic::unwind_safe::UnwindSafe, core::marker::PhantomData<V>: core::panic::unwind_safe::UnwindSafe
+impl<T, V> core::marker::Freeze for aya::maps::cgroup_storage::CgroupStorage<T, V> where T: core::marker::Freeze
+impl<T, V> core::marker::Send for aya::maps::cgroup_storage::CgroupStorage<T, V> where T: core::marker::Send, V: core::marker::Send
+impl<T, V> core::marker::Sync for aya::maps::cgroup_storage::CgroupStorage<T, V> where T: core::marker::Sync, V: core::marker::Sync
+impl<T, V> core::marker::Unpin for aya::maps::cgroup_storage::CgroupStorage<T, V> where T: core::marker::Unpin, V: core::marker::Unpin
+impl<T, V> core::marker::UnsafeUnpin for aya::maps::cgroup_storage::CgroupStorage<T, V> where T: core::marker::UnsafeUnpin
+impl<T, V> core::panic::unwind_safe::RefUnwindSafe for aya::maps::cgroup_storage::CgroupStorage<T, V> where T: core::panic::unwind_safe::RefUnwindSafe, V: core::panic::unwind_safe::RefUnwindSafe
+impl<T, V> core::panic::unwind_safe::UnwindSafe for aya::maps::cgroup_storage::CgroupStorage<T, V> where T: core::panic::unwind_safe::UnwindSafe, V: core::panic::unwind_safe::UnwindSafe
 pub struct aya::maps::cgroup_storage::CgroupStorageKey
 impl aya::maps::cgroup_storage::CgroupStorageKey
 pub const fn aya::maps::cgroup_storage::CgroupStorageKey::new(u64, u32) -> Self
@@ -201,13 +249,13 @@ pub fn aya::maps::cgroup_storage::PerCpuCgroupStorage<T, V>::fmt(&self, &mut cor
 impl<V: aya::Pod> core::convert::TryFrom<aya::maps::Map> for aya::maps::cgroup_storage::PerCpuCgroupStorage<aya::maps::MapData, V>
 pub type aya::maps::cgroup_storage::PerCpuCgroupStorage<aya::maps::MapData, V>::Error = aya::maps::MapError
 pub fn aya::maps::cgroup_storage::PerCpuCgroupStorage<aya::maps::MapData, V>::try_from(aya::maps::Map) -> core::result::Result<Self, Self::Error>
-impl<T, V> core::marker::Freeze for aya::maps::cgroup_storage::PerCpuCgroupStorage<T, V> where T: core::marker::Freeze, core::marker::PhantomData<V>: core::marker::Freeze
-impl<T, V> core::marker::Send for aya::maps::cgroup_storage::PerCpuCgroupStorage<T, V> where T: core::marker::Send, core::marker::PhantomData<V>: core::marker::Send
-impl<T, V> core::marker::Sync for aya::maps::cgroup_storage::PerCpuCgroupStorage<T, V> where T: core::marker::Sync, core::marker::PhantomData<V>: core::marker::Sync
-impl<T, V> core::marker::Unpin for aya::maps::cgroup_storage::PerCpuCgroupStorage<T, V> where T: core::marker::Unpin, core::marker::PhantomData<V>: core::marker::Unpin
-impl<T, V> core::marker::UnsafeUnpin for aya::maps::cgroup_storage::PerCpuCgroupStorage<T, V> where T: core::marker::UnsafeUnpin, core::marker::PhantomData<V>: core::marker::UnsafeUnpin
-impl<T, V> core::panic::unwind_safe::RefUnwindSafe for aya::maps::cgroup_storage::PerCpuCgroupStorage<T, V> where T: core::panic::unwind_safe::RefUnwindSafe, core::marker::PhantomData<V>: core::panic::unwind_safe::RefUnwindSafe
-impl<T, V> core::panic::unwind_safe::UnwindSafe for aya::maps::cgroup_storage::PerCpuCgroupStorage<T, V> where T: core::panic::unwind_safe::UnwindSafe, core::marker::PhantomData<V>: core::panic::unwind_safe::UnwindSafe
+impl<T, V> core::marker::Freeze for aya::maps::cgroup_storage::PerCpuCgroupStorage<T, V> where T: core::marker::Freeze
+impl<T, V> core::marker::Send for aya::maps::cgroup_storage::PerCpuCgroupStorage<T, V> where T: core::marker::Send, V: core::marker::Send
+impl<T, V> core::marker::Sync for aya::maps::cgroup_storage::PerCpuCgroupStorage<T, V> where T: core::marker::Sync, V: core::marker::Sync
+impl<T, V> core::marker::Unpin for aya::maps::cgroup_storage::PerCpuCgroupStorage<T, V> where T: core::marker::Unpin, V: core::marker::Unpin
+impl<T, V> core::marker::UnsafeUnpin for aya::maps::cgroup_storage::PerCpuCgroupStorage<T, V> where T: core::marker::UnsafeUnpin
+impl<T, V> core::panic::unwind_safe::RefUnwindSafe for aya::maps::cgroup_storage::PerCpuCgroupStorage<T, V> where T: core::panic::unwind_safe::RefUnwindSafe, V: core::panic::unwind_safe::RefUnwindSafe
+impl<T, V> core::panic::unwind_safe::UnwindSafe for aya::maps::cgroup_storage::PerCpuCgroupStorage<T, V> where T: core::panic::unwind_safe::UnwindSafe, V: core::panic::unwind_safe::UnwindSafe
 pub mod aya::maps::cgrp_storage
 pub struct aya::maps::cgrp_storage::CgrpStorage<T, V: aya::Pod>
 impl<T: core::borrow::Borrow<aya::maps::MapData>, V: aya::Pod> aya::maps::cgrp_storage::CgrpStorage<T, V>
@@ -228,13 +276,13 @@ pub fn aya::maps::cgrp_storage::CgrpStorage<T, V>::fmt(&self, &mut core::fmt::Fo
 impl<V: aya::Pod> core::convert::TryFrom<aya::maps::Map> for aya::maps::cgrp_storage::CgrpStorage<aya::maps::MapData, V>
 pub type aya::maps::cgrp_storage::CgrpStorage<aya::maps::MapData, V>::Error = aya::maps::MapError
 pub fn aya::maps::cgrp_storage::CgrpStorage<aya::maps::MapData, V>::try_from(aya::maps::Map) -> core::result::Result<Self, Self::Error>
-impl<T, V> core::marker::Freeze for aya::maps::cgrp_storage::CgrpStorage<T, V> where T: core::marker::Freeze, core::marker::PhantomData<V>: core::marker::Freeze
-impl<T, V> core::marker::Send for aya::maps::cgrp_storage::CgrpStorage<T, V> where T: core::marker::Send, core::marker::PhantomData<V>: core::marker::Send
-impl<T, V> core::marker::Sync for aya::maps::cgrp_storage::CgrpStorage<T, V> where T: core::marker::Sync, core::marker::PhantomData<V>: core::marker::Sync
-impl<T, V> core::marker::Unpin for aya::maps::cgrp_storage::CgrpStorage<T, V> where T: core::marker::Unpin, core::marker::PhantomData<V>: core::marker::Unpin
-impl<T, V> core::marker::UnsafeUnpin for aya::maps::cgrp_storage::CgrpStorage<T, V> where T: core::marker::UnsafeUnpin, core::marker::PhantomData<V>: core::marker::UnsafeUnpin
-impl<T, V> core::panic::unwind_safe::RefUnwindSafe for aya::maps::cgrp_storage::CgrpStorage<T, V> where T: core::panic::unwind_safe::RefUnwindSafe, core::marker::PhantomData<V>: core::panic::unwind_safe::RefUnwindSafe
-impl<T, V> core::panic::unwind_safe::UnwindSafe for aya::maps::cgrp_storage::CgrpStorage<T, V> where T: core::panic::unwind_safe::UnwindSafe, core::marker::PhantomData<V>: core::panic::unwind_safe::UnwindSafe
+impl<T, V> core::marker::Freeze for aya::maps::cgrp_storage::CgrpStorage<T, V> where T: core::marker::Freeze
+impl<T, V> core::marker::Send for aya::maps::cgrp_storage::CgrpStorage<T, V> where T: core::marker::Send, V: core::marker::Send
+impl<T, V> core::marker::Sync for aya::maps::cgrp_storage::CgrpStorage<T, V> where T: core::marker::Sync, V: core::marker::Sync
+impl<T, V> core::marker::Unpin for aya::maps::cgrp_storage::CgrpStorage<T, V> where T: core::marker::Unpin, V: core::marker::Unpin
+impl<T, V> core::marker::UnsafeUnpin for aya::maps::cgrp_storage::CgrpStorage<T, V> where T: core::marker::UnsafeUnpin
+impl<T, V> core::panic::unwind_safe::RefUnwindSafe for aya::maps::cgrp_storage::CgrpStorage<T, V> where T: core::panic::unwind_safe::RefUnwindSafe, V: core::panic::unwind_safe::RefUnwindSafe
+impl<T, V> core::panic::unwind_safe::UnwindSafe for aya::maps::cgrp_storage::CgrpStorage<T, V> where T: core::panic::unwind_safe::UnwindSafe, V: core::panic::unwind_safe::UnwindSafe
 pub mod aya::maps::hash_map
 pub struct aya::maps::hash_map::HashMap<T, K, V>
 impl<K: aya::Pod, V: aya::Pod> aya::maps::hash_map::HashMap<aya::maps::MapData, K, V>
@@ -266,13 +314,13 @@ pub fn aya::maps::hash_map::HashMap<T, K, V>::get(&self, &K) -> core::result::Re
 pub fn aya::maps::hash_map::HashMap<T, K, V>::map(&self) -> &aya::maps::MapData
 impl<T: core::fmt::Debug, K: core::fmt::Debug, V: core::fmt::Debug> core::fmt::Debug for aya::maps::hash_map::HashMap<T, K, V>
 pub fn aya::maps::hash_map::HashMap<T, K, V>::fmt(&self, &mut core::fmt::Formatter<'_>) -> core::fmt::Result
-impl<T, K, V> core::marker::Freeze for aya::maps::hash_map::HashMap<T, K, V> where T: core::marker::Freeze, core::marker::PhantomData<(K, V)>: core::marker::Freeze
-impl<T, K, V> core::marker::Send for aya::maps::hash_map::HashMap<T, K, V> where T: core::marker::Send, core::marker::PhantomData<(K, V)>: core::marker::Send
-impl<T, K, V> core::marker::Sync for aya::maps::hash_map::HashMap<T, K, V> where T: core::marker::Sync, core::marker::PhantomData<(K, V)>: core::marker::Sync
-impl<T, K, V> core::marker::Unpin for aya::maps::hash_map::HashMap<T, K, V> where T: core::marker::Unpin, core::marker::PhantomData<(K, V)>: core::marker::Unpin
-impl<T, K, V> core::marker::UnsafeUnpin for aya::maps::hash_map::HashMap<T, K, V> where T: core::marker::UnsafeUnpin, core::marker::PhantomData<(K, V)>: core::marker::UnsafeUnpin
-impl<T, K, V> core::panic::unwind_safe::RefUnwindSafe for aya::maps::hash_map::HashMap<T, K, V> where T: core::panic::unwind_safe::RefUnwindSafe, core::marker::PhantomData<(K, V)>: core::panic::unwind_safe::RefUnwindSafe
-impl<T, K, V> core::panic::unwind_safe::UnwindSafe for aya::maps::hash_map::HashMap<T, K, V> where T: core::panic::unwind_safe::UnwindSafe, core::marker::PhantomData<(K, V)>: core::panic::unwind_safe::UnwindSafe
+impl<T, K, V> core::marker::Freeze for aya::maps::hash_map::HashMap<T, K, V> where T: core::marker::Freeze
+impl<T, K, V> core::marker::Send for aya::maps::hash_map::HashMap<T, K, V> where T: core::marker::Send, K: core::marker::Send, V: core::marker::Send
+impl<T, K, V> core::marker::Sync for aya::maps::hash_map::HashMap<T, K, V> where T: core::marker::Sync, K: core::marker::Sync, V: core::marker::Sync
+impl<T, K, V> core::marker::Unpin for aya::maps::hash_map::HashMap<T, K, V> where T: core::marker::Unpin, K: core::marker::Unpin, V: core::marker::Unpin
+impl<T, K, V> core::marker::UnsafeUnpin for aya::maps::hash_map::HashMap<T, K, V> where T: core::marker::UnsafeUnpin
+impl<T, K, V> core::panic::unwind_safe::RefUnwindSafe for aya::maps::hash_map::HashMap<T, K, V> where T: core::panic::unwind_safe::RefUnwindSafe, K: core::panic::unwind_safe::RefUnwindSafe, V: core::panic::unwind_safe::RefUnwindSafe
+impl<T, K, V> core::panic::unwind_safe::UnwindSafe for aya::maps::hash_map::HashMap<T, K, V> where T: core::panic::unwind_safe::UnwindSafe, K: core::panic::unwind_safe::UnwindSafe, V: core::panic::unwind_safe::UnwindSafe
 pub struct aya::maps::hash_map::PerCpuHashMap<T, K: aya::Pod, V: aya::Pod>
 impl<K: aya::Pod, V: aya::Pod> aya::maps::hash_map::PerCpuHashMap<aya::maps::MapData, K, V>
 pub fn aya::maps::hash_map::PerCpuHashMap<aya::maps::MapData, K, V>::create(u32, u32) -> core::result::Result<Self, aya::maps::MapError>
@@ -301,13 +349,13 @@ pub fn aya::maps::hash_map::PerCpuHashMap<aya::maps::MapData, K, V>::try_from(ay
 impl<T: core::borrow::Borrow<aya::maps::MapData>, K: aya::Pod, V: aya::Pod> aya::maps::IterableMap<K, aya::maps::PerCpuValues<V>> for aya::maps::hash_map::PerCpuHashMap<T, K, V>
 pub fn aya::maps::hash_map::PerCpuHashMap<T, K, V>::get(&self, &K) -> core::result::Result<aya::maps::PerCpuValues<V>, aya::maps::MapError>
 pub fn aya::maps::hash_map::PerCpuHashMap<T, K, V>::map(&self) -> &aya::maps::MapData
-impl<T, K, V> core::marker::Freeze for aya::maps::hash_map::PerCpuHashMap<T, K, V> where T: core::marker::Freeze, core::marker::PhantomData<(K, V)>: core::marker::Freeze
-impl<T, K, V> core::marker::Send for aya::maps::hash_map::PerCpuHashMap<T, K, V> where T: core::marker::Send, core::marker::PhantomData<(K, V)>: core::marker::Send
-impl<T, K, V> core::marker::Sync for aya::maps::hash_map::PerCpuHashMap<T, K, V> where T: core::marker::Sync, core::marker::PhantomData<(K, V)>: core::marker::Sync
-impl<T, K, V> core::marker::Unpin for aya::maps::hash_map::PerCpuHashMap<T, K, V> where T: core::marker::Unpin, core::marker::PhantomData<(K, V)>: core::marker::Unpin
-impl<T, K, V> core::marker::UnsafeUnpin for aya::maps::hash_map::PerCpuHashMap<T, K, V> where T: core::marker::UnsafeUnpin, core::marker::PhantomData<(K, V)>: core::marker::UnsafeUnpin
-impl<T, K, V> core::panic::unwind_safe::RefUnwindSafe for aya::maps::hash_map::PerCpuHashMap<T, K, V> where T: core::panic::unwind_safe::RefUnwindSafe, core::marker::PhantomData<(K, V)>: core::panic::unwind_safe::RefUnwindSafe
-impl<T, K, V> core::panic::unwind_safe::UnwindSafe for aya::maps::hash_map::PerCpuHashMap<T, K, V> where T: core::panic::unwind_safe::UnwindSafe, core::marker::PhantomData<(K, V)>: core::panic::unwind_safe::UnwindSafe
+impl<T, K, V> core::marker::Freeze for aya::maps::hash_map::PerCpuHashMap<T, K, V> where T: core::marker::Freeze
+impl<T, K, V> core::marker::Send for aya::maps::hash_map::PerCpuHashMap<T, K, V> where T: core::marker::Send, K: core::marker::Send, V: core::marker::Send
+impl<T, K, V> core::marker::Sync for aya::maps::hash_map::PerCpuHashMap<T, K, V> where T: core::marker::Sync, K: core::marker::Sync, V: core::marker::Sync
+impl<T, K, V> core::marker::Unpin for aya::maps::hash_map::PerCpuHashMap<T, K, V> where T: core::marker::Unpin, K: core::marker::Unpin, V: core::marker::Unpin
+impl<T, K, V> core::marker::UnsafeUnpin for aya::maps::hash_map::PerCpuHashMap<T, K, V> where T: core::marker::UnsafeUnpin
+impl<T, K, V> core::panic::unwind_safe::RefUnwindSafe for aya::maps::hash_map::PerCpuHashMap<T, K, V> where T: core::panic::unwind_safe::RefUnwindSafe, K: core::panic::unwind_safe::RefUnwindSafe, V: core::panic::unwind_safe::RefUnwindSafe
+impl<T, K, V> core::panic::unwind_safe::UnwindSafe for aya::maps::hash_map::PerCpuHashMap<T, K, V> where T: core::panic::unwind_safe::UnwindSafe, K: core::panic::unwind_safe::UnwindSafe, V: core::panic::unwind_safe::UnwindSafe
 pub mod aya::maps::inode_storage
 pub struct aya::maps::inode_storage::InodeStorage<T, V: aya::Pod>
 impl<T: core::borrow::Borrow<aya::maps::MapData>, V: aya::Pod> aya::maps::inode_storage::InodeStorage<T, V>
@@ -328,13 +376,13 @@ pub fn aya::maps::inode_storage::InodeStorage<T, V>::fmt(&self, &mut core::fmt::
 impl<V: aya::Pod> core::convert::TryFrom<aya::maps::Map> for aya::maps::inode_storage::InodeStorage<aya::maps::MapData, V>
 pub type aya::maps::inode_storage::InodeStorage<aya::maps::MapData, V>::Error = aya::maps::MapError
 pub fn aya::maps::inode_storage::InodeStorage<aya::maps::MapData, V>::try_from(aya::maps::Map) -> core::result::Result<Self, Self::Error>
-impl<T, V> core::marker::Freeze for aya::maps::inode_storage::InodeStorage<T, V> where T: core::marker::Freeze, core::marker::PhantomData<V>: core::marker::Freeze
-impl<T, V> core::marker::Send for aya::maps::inode_storage::InodeStorage<T, V> where T: core::marker::Send, core::marker::PhantomData<V>: core::marker::Send
-impl<T, V> core::marker::Sync for aya::maps::inode_storage::InodeStorage<T, V> where T: core::marker::Sync, core::marker::PhantomData<V>: core::marker::Sync
-impl<T, V> core::marker::Unpin for aya::maps::inode_storage::InodeStorage<T, V> where T: core::marker::Unpin, core::marker::PhantomData<V>: core::marker::Unpin
-impl<T, V> core::marker::UnsafeUnpin for aya::maps::inode_storage::InodeStorage<T, V> where T: core::marker::UnsafeUnpin, core::marker::PhantomData<V>: core::marker::UnsafeUnpin
-impl<T, V> core::panic::unwind_safe::RefUnwindSafe for aya::maps::inode_storage::InodeStorage<T, V> where T: core::panic::unwind_safe::RefUnwindSafe, core::marker::PhantomData<V>: core::panic::unwind_safe::RefUnwindSafe
-impl<T, V> core::panic::unwind_safe::UnwindSafe for aya::maps::inode_storage::InodeStorage<T, V> where T: core::panic::unwind_safe::UnwindSafe, core::marker::PhantomData<V>: core::panic::unwind_safe::UnwindSafe
+impl<T, V> core::marker::Freeze for aya::maps::inode_storage::InodeStorage<T, V> where T: core::marker::Freeze
+impl<T, V> core::marker::Send for aya::maps::inode_storage::InodeStorage<T, V> where T: core::marker::Send, V: core::marker::Send
+impl<T, V> core::marker::Sync for aya::maps::inode_storage::InodeStorage<T, V> where T: core::marker::Sync, V: core::marker::Sync
+impl<T, V> core::marker::Unpin for aya::maps::inode_storage::InodeStorage<T, V> where T: core::marker::Unpin, V: core::marker::Unpin
+impl<T, V> core::marker::UnsafeUnpin for aya::maps::inode_storage::InodeStorage<T, V> where T: core::marker::UnsafeUnpin
+impl<T, V> core::panic::unwind_safe::RefUnwindSafe for aya::maps::inode_storage::InodeStorage<T, V> where T: core::panic::unwind_safe::RefUnwindSafe, V: core::panic::unwind_safe::RefUnwindSafe
+impl<T, V> core::panic::unwind_safe::UnwindSafe for aya::maps::inode_storage::InodeStorage<T, V> where T: core::panic::unwind_safe::UnwindSafe, V: core::panic::unwind_safe::UnwindSafe
 pub mod aya::maps::lpm_trie
 #[repr(C, packed(1))] pub struct aya::maps::lpm_trie::Key<K>
 impl<K: aya::Pod> aya::maps::lpm_trie::Key<K>
@@ -385,13 +433,13 @@ pub fn aya::maps::lpm_trie::LpmTrie<T, K, V>::get(&self, &aya::maps::lpm_trie::K
 pub fn aya::maps::lpm_trie::LpmTrie<T, K, V>::map(&self) -> &aya::maps::MapData
 impl<T: core::fmt::Debug, K: core::fmt::Debug, V: core::fmt::Debug> core::fmt::Debug for aya::maps::lpm_trie::LpmTrie<T, K, V>
 pub fn aya::maps::lpm_trie::LpmTrie<T, K, V>::fmt(&self, &mut core::fmt::Formatter<'_>) -> core::fmt::Result
-impl<T, K, V> core::marker::Freeze for aya::maps::lpm_trie::LpmTrie<T, K, V> where T: core::marker::Freeze, core::marker::PhantomData<(K, V)>: core::marker::Freeze
-impl<T, K, V> core::marker::Send for aya::maps::lpm_trie::LpmTrie<T, K, V> where T: core::marker::Send, core::marker::PhantomData<(K, V)>: core::marker::Send
-impl<T, K, V> core::marker::Sync for aya::maps::lpm_trie::LpmTrie<T, K, V> where T: core::marker::Sync, core::marker::PhantomData<(K, V)>: core::marker::Sync
-impl<T, K, V> core::marker::Unpin for aya::maps::lpm_trie::LpmTrie<T, K, V> where T: core::marker::Unpin, core::marker::PhantomData<(K, V)>: core::marker::Unpin
-impl<T, K, V> core::marker::UnsafeUnpin for aya::maps::lpm_trie::LpmTrie<T, K, V> where T: core::marker::UnsafeUnpin, core::marker::PhantomData<(K, V)>: core::marker::UnsafeUnpin
-impl<T, K, V> core::panic::unwind_safe::RefUnwindSafe for aya::maps::lpm_trie::LpmTrie<T, K, V> where T: core::panic::unwind_safe::RefUnwindSafe, core::marker::PhantomData<(K, V)>: core::panic::unwind_safe::RefUnwindSafe
-impl<T, K, V> core::panic::unwind_safe::UnwindSafe for aya::maps::lpm_trie::LpmTrie<T, K, V> where T: core::panic::unwind_safe::UnwindSafe, core::marker::PhantomData<(K, V)>: core::panic::unwind_safe::UnwindSafe
+impl<T, K, V> core::marker::Freeze for aya::maps::lpm_trie::LpmTrie<T, K, V> where T: core::marker::Freeze
+impl<T, K, V> core::marker::Send for aya::maps::lpm_trie::LpmTrie<T, K, V> where T: core::marker::Send, K: core::marker::Send, V: core::marker::Send
+impl<T, K, V> core::marker::Sync for aya::maps::lpm_trie::LpmTrie<T, K, V> where T: core::marker::Sync, K: core::marker::Sync, V: core::marker::Sync
+impl<T, K, V> core::marker::Unpin for aya::maps::lpm_trie::LpmTrie<T, K, V> where T: core::marker::Unpin, K: core::marker::Unpin, V: core::marker::Unpin
+impl<T, K, V> core::marker::UnsafeUnpin for aya::maps::lpm_trie::LpmTrie<T, K, V> where T: core::marker::UnsafeUnpin
+impl<T, K, V> core::panic::unwind_safe::RefUnwindSafe for aya::maps::lpm_trie::LpmTrie<T, K, V> where T: core::panic::unwind_safe::RefUnwindSafe, K: core::panic::unwind_safe::RefUnwindSafe, V: core::panic::unwind_safe::RefUnwindSafe
+impl<T, K, V> core::panic::unwind_safe::UnwindSafe for aya::maps::lpm_trie::LpmTrie<T, K, V> where T: core::panic::unwind_safe::UnwindSafe, K: core::panic::unwind_safe::UnwindSafe, V: core::panic::unwind_safe::UnwindSafe
 pub mod aya::maps::of_maps
 pub struct aya::maps::of_maps::ArrayOfMaps<T, V>
 impl<T: core::borrow::Borrow<aya::maps::MapData>, V: aya::maps::FromMapData> aya::maps::ArrayOfMaps<T, V>
@@ -414,13 +462,13 @@ pub fn aya::maps::ArrayOfMaps<T, V>::fmt(&self, &mut core::fmt::Formatter<'_>) -
 impl<V: aya::maps::InnerMap> core::convert::TryFrom<aya::maps::Map> for aya::maps::ArrayOfMaps<aya::maps::MapData, V>
 pub type aya::maps::ArrayOfMaps<aya::maps::MapData, V>::Error = aya::maps::MapError
 pub fn aya::maps::ArrayOfMaps<aya::maps::MapData, V>::try_from(aya::maps::Map) -> core::result::Result<Self, Self::Error>
-impl<T, V> core::marker::Freeze for aya::maps::ArrayOfMaps<T, V> where T: core::marker::Freeze, core::marker::PhantomData<V>: core::marker::Freeze
-impl<T, V> core::marker::Send for aya::maps::ArrayOfMaps<T, V> where T: core::marker::Send, core::marker::PhantomData<V>: core::marker::Send
-impl<T, V> core::marker::Sync for aya::maps::ArrayOfMaps<T, V> where T: core::marker::Sync, core::marker::PhantomData<V>: core::marker::Sync
-impl<T, V> core::marker::Unpin for aya::maps::ArrayOfMaps<T, V> where T: core::marker::Unpin, core::marker::PhantomData<V>: core::marker::Unpin
-impl<T, V> core::marker::UnsafeUnpin for aya::maps::ArrayOfMaps<T, V> where T: core::marker::UnsafeUnpin, core::marker::PhantomData<V>: core::marker::UnsafeUnpin
-impl<T, V> core::panic::unwind_safe::RefUnwindSafe for aya::maps::ArrayOfMaps<T, V> where T: core::panic::unwind_safe::RefUnwindSafe, core::marker::PhantomData<V>: core::panic::unwind_safe::RefUnwindSafe
-impl<T, V> core::panic::unwind_safe::UnwindSafe for aya::maps::ArrayOfMaps<T, V> where T: core::panic::unwind_safe::UnwindSafe, core::marker::PhantomData<V>: core::panic::unwind_safe::UnwindSafe
+impl<T, V> core::marker::Freeze for aya::maps::ArrayOfMaps<T, V> where T: core::marker::Freeze
+impl<T, V> core::marker::Send for aya::maps::ArrayOfMaps<T, V> where T: core::marker::Send, V: core::marker::Send
+impl<T, V> core::marker::Sync for aya::maps::ArrayOfMaps<T, V> where T: core::marker::Sync, V: core::marker::Sync
+impl<T, V> core::marker::Unpin for aya::maps::ArrayOfMaps<T, V> where T: core::marker::Unpin, V: core::marker::Unpin
+impl<T, V> core::marker::UnsafeUnpin for aya::maps::ArrayOfMaps<T, V> where T: core::marker::UnsafeUnpin
+impl<T, V> core::panic::unwind_safe::RefUnwindSafe for aya::maps::ArrayOfMaps<T, V> where T: core::panic::unwind_safe::RefUnwindSafe, V: core::panic::unwind_safe::RefUnwindSafe
+impl<T, V> core::panic::unwind_safe::UnwindSafe for aya::maps::ArrayOfMaps<T, V> where T: core::panic::unwind_safe::UnwindSafe, V: core::panic::unwind_safe::UnwindSafe
 pub struct aya::maps::of_maps::HashOfMaps<T, K, V>
 impl<K: aya::Pod, V> aya::maps::HashOfMaps<aya::maps::MapData, K, V>
 pub fn aya::maps::HashOfMaps<aya::maps::MapData, K, V>::pin<P: core::convert::AsRef<std::path::Path>>(self, P) -> core::result::Result<(), aya::pin::PinError>
@@ -443,13 +491,13 @@ pub type aya::maps::HashOfMaps<aya::maps::MapData, K, V>::Error = aya::maps::Map
 pub fn aya::maps::HashOfMaps<aya::maps::MapData, K, V>::try_from(aya::maps::Map) -> core::result::Result<Self, Self::Error>
 impl<T: core::fmt::Debug, K, V> core::fmt::Debug for aya::maps::HashOfMaps<T, K, V>
 pub fn aya::maps::HashOfMaps<T, K, V>::fmt(&self, &mut core::fmt::Formatter<'_>) -> core::fmt::Result
-impl<T, K, V> core::marker::Freeze for aya::maps::HashOfMaps<T, K, V> where T: core::marker::Freeze, core::marker::PhantomData<(K, V)>: core::marker::Freeze
-impl<T, K, V> core::marker::Send for aya::maps::HashOfMaps<T, K, V> where T: core::marker::Send, core::marker::PhantomData<(K, V)>: core::marker::Send
-impl<T, K, V> core::marker::Sync for aya::maps::HashOfMaps<T, K, V> where T: core::marker::Sync, core::marker::PhantomData<(K, V)>: core::marker::Sync
-impl<T, K, V> core::marker::Unpin for aya::maps::HashOfMaps<T, K, V> where T: core::marker::Unpin, core::marker::PhantomData<(K, V)>: core::marker::Unpin
-impl<T, K, V> core::marker::UnsafeUnpin for aya::maps::HashOfMaps<T, K, V> where T: core::marker::UnsafeUnpin, core::marker::PhantomData<(K, V)>: core::marker::UnsafeUnpin
-impl<T, K, V> core::panic::unwind_safe::RefUnwindSafe for aya::maps::HashOfMaps<T, K, V> where T: core::panic::unwind_safe::RefUnwindSafe, core::marker::PhantomData<(K, V)>: core::panic::unwind_safe::RefUnwindSafe
-impl<T, K, V> core::panic::unwind_safe::UnwindSafe for aya::maps::HashOfMaps<T, K, V> where T: core::panic::unwind_safe::UnwindSafe, core::marker::PhantomData<(K, V)>: core::panic::unwind_safe::UnwindSafe
+impl<T, K, V> core::marker::Freeze for aya::maps::HashOfMaps<T, K, V> where T: core::marker::Freeze
+impl<T, K, V> core::marker::Send for aya::maps::HashOfMaps<T, K, V> where T: core::marker::Send, K: core::marker::Send, V: core::marker::Send
+impl<T, K, V> core::marker::Sync for aya::maps::HashOfMaps<T, K, V> where T: core::marker::Sync, K: core::marker::Sync, V: core::marker::Sync
+impl<T, K, V> core::marker::Unpin for aya::maps::HashOfMaps<T, K, V> where T: core::marker::Unpin, K: core::marker::Unpin, V: core::marker::Unpin
+impl<T, K, V> core::marker::UnsafeUnpin for aya::maps::HashOfMaps<T, K, V> where T: core::marker::UnsafeUnpin
+impl<T, K, V> core::panic::unwind_safe::RefUnwindSafe for aya::maps::HashOfMaps<T, K, V> where T: core::panic::unwind_safe::RefUnwindSafe, K: core::panic::unwind_safe::RefUnwindSafe, V: core::panic::unwind_safe::RefUnwindSafe
+impl<T, K, V> core::panic::unwind_safe::UnwindSafe for aya::maps::HashOfMaps<T, K, V> where T: core::panic::unwind_safe::UnwindSafe, K: core::panic::unwind_safe::UnwindSafe, V: core::panic::unwind_safe::UnwindSafe
 pub mod aya::maps::perf
 pub enum aya::maps::perf::PerfBufferError
 pub aya::maps::perf::PerfBufferError::IOError(core::io::error::Error)
@@ -505,13 +553,13 @@ pub fn aya::maps::perf::PerfEventArray<&'a aya::maps::MapData>::try_from(&'a aya
 impl<'a> core::convert::TryFrom<&'a mut aya::maps::Map> for aya::maps::perf::PerfEventArray<&'a mut aya::maps::MapData>
 pub type aya::maps::perf::PerfEventArray<&'a mut aya::maps::MapData>::Error = aya::maps::MapError
 pub fn aya::maps::perf::PerfEventArray<&'a mut aya::maps::MapData>::try_from(&'a mut aya::maps::Map) -> core::result::Result<Self, Self::Error>
-impl<T> core::marker::Freeze for aya::maps::perf::PerfEventArray<T> where alloc::sync::Arc<T>: core::marker::Freeze
-impl<T> core::marker::Send for aya::maps::perf::PerfEventArray<T> where alloc::sync::Arc<T>: core::marker::Send
-impl<T> core::marker::Sync for aya::maps::perf::PerfEventArray<T> where alloc::sync::Arc<T>: core::marker::Sync
-impl<T> core::marker::Unpin for aya::maps::perf::PerfEventArray<T> where alloc::sync::Arc<T>: core::marker::Unpin
-impl<T> core::marker::UnsafeUnpin for aya::maps::perf::PerfEventArray<T> where alloc::sync::Arc<T>: core::marker::UnsafeUnpin
-impl<T> core::panic::unwind_safe::RefUnwindSafe for aya::maps::perf::PerfEventArray<T> where alloc::sync::Arc<T>: core::panic::unwind_safe::RefUnwindSafe
-impl<T> core::panic::unwind_safe::UnwindSafe for aya::maps::perf::PerfEventArray<T> where alloc::sync::Arc<T>: core::panic::unwind_safe::UnwindSafe
+impl<T> core::marker::Freeze for aya::maps::perf::PerfEventArray<T>
+impl<T> core::marker::Send for aya::maps::perf::PerfEventArray<T> where T: core::marker::Sync + core::marker::Send
+impl<T> core::marker::Sync for aya::maps::perf::PerfEventArray<T> where T: core::marker::Sync + core::marker::Send
+impl<T> core::marker::Unpin for aya::maps::perf::PerfEventArray<T>
+impl<T> core::marker::UnsafeUnpin for aya::maps::perf::PerfEventArray<T>
+impl<T> core::panic::unwind_safe::RefUnwindSafe for aya::maps::perf::PerfEventArray<T> where T: core::panic::unwind_safe::RefUnwindSafe
+impl<T> core::panic::unwind_safe::UnwindSafe for aya::maps::perf::PerfEventArray<T> where T: core::panic::unwind_safe::RefUnwindSafe
 pub struct aya::maps::perf::PerfEventArrayBuffer<T>
 impl<T: core::borrow::BorrowMut<aya::maps::MapData>> aya::maps::perf::PerfEventArrayBuffer<T>
 pub fn aya::maps::perf::PerfEventArrayBuffer<T>::fold<C, F>(&mut self, C, F) -> C where F: core::ops::function::FnMut(C, aya::maps::perf::PerfEvent<'_>) -> C
@@ -522,13 +570,13 @@ impl<T: core::borrow::BorrowMut<aya::maps::MapData>> std::os::fd::owned::AsFd fo
 pub fn aya::maps::perf::PerfEventArrayBuffer<T>::as_fd(&self) -> std::os::fd::owned::BorrowedFd<'_>
 impl<T: core::borrow::BorrowMut<aya::maps::MapData>> std::os::fd::raw::AsRawFd for aya::maps::perf::PerfEventArrayBuffer<T>
 pub fn aya::maps::perf::PerfEventArrayBuffer<T>::as_raw_fd(&self) -> std::os::fd::raw::RawFd
-impl<T> core::marker::Freeze for aya::maps::perf::PerfEventArrayBuffer<T> where alloc::sync::Arc<T>: core::marker::Freeze
-impl<T> core::marker::Send for aya::maps::perf::PerfEventArrayBuffer<T> where alloc::sync::Arc<T>: core::marker::Send
-impl<T> core::marker::Sync for aya::maps::perf::PerfEventArrayBuffer<T> where alloc::sync::Arc<T>: core::marker::Sync
-impl<T> core::marker::Unpin for aya::maps::perf::PerfEventArrayBuffer<T> where alloc::sync::Arc<T>: core::marker::Unpin
-impl<T> core::marker::UnsafeUnpin for aya::maps::perf::PerfEventArrayBuffer<T> where alloc::sync::Arc<T>: core::marker::UnsafeUnpin
-impl<T> core::panic::unwind_safe::RefUnwindSafe for aya::maps::perf::PerfEventArrayBuffer<T> where alloc::sync::Arc<T>: core::panic::unwind_safe::RefUnwindSafe
-impl<T> core::panic::unwind_safe::UnwindSafe for aya::maps::perf::PerfEventArrayBuffer<T> where alloc::sync::Arc<T>: core::panic::unwind_safe::UnwindSafe
+impl<T> core::marker::Freeze for aya::maps::perf::PerfEventArrayBuffer<T>
+impl<T> core::marker::Send for aya::maps::perf::PerfEventArrayBuffer<T> where T: core::marker::Sync + core::marker::Send
+impl<T> core::marker::Sync for aya::maps::perf::PerfEventArrayBuffer<T> where T: core::marker::Sync + core::marker::Send
+impl<T> core::marker::Unpin for aya::maps::perf::PerfEventArrayBuffer<T>
+impl<T> core::marker::UnsafeUnpin for aya::maps::perf::PerfEventArrayBuffer<T>
+impl<T> core::panic::unwind_safe::RefUnwindSafe for aya::maps::perf::PerfEventArrayBuffer<T> where T: core::panic::unwind_safe::RefUnwindSafe
+impl<T> core::panic::unwind_safe::UnwindSafe for aya::maps::perf::PerfEventArrayBuffer<T> where T: core::panic::unwind_safe::RefUnwindSafe
 pub mod aya::maps::queue
 pub struct aya::maps::queue::Queue<T, V: aya::Pod>
 impl<T: core::borrow::Borrow<aya::maps::MapData>, V: aya::Pod> aya::maps::queue::Queue<T, V>
@@ -549,13 +597,13 @@ pub fn aya::maps::queue::Queue<&'a mut aya::maps::MapData, V>::try_from(&'a mut 
 impl<V: aya::Pod> core::convert::TryFrom<aya::maps::Map> for aya::maps::queue::Queue<aya::maps::MapData, V>
 pub type aya::maps::queue::Queue<aya::maps::MapData, V>::Error = aya::maps::MapError
 pub fn aya::maps::queue::Queue<aya::maps::MapData, V>::try_from(aya::maps::Map) -> core::result::Result<Self, Self::Error>
-impl<T, V> core::marker::Freeze for aya::maps::queue::Queue<T, V> where T: core::marker::Freeze, core::marker::PhantomData<V>: core::marker::Freeze
-impl<T, V> core::marker::Send for aya::maps::queue::Queue<T, V> where T: core::marker::Send, core::marker::PhantomData<V>: core::marker::Send
-impl<T, V> core::marker::Sync for aya::maps::queue::Queue<T, V> where T: core::marker::Sync, core::marker::PhantomData<V>: core::marker::Sync
-impl<T, V> core::marker::Unpin for aya::maps::queue::Queue<T, V> where T: core::marker::Unpin, core::marker::PhantomData<V>: core::marker::Unpin
-impl<T, V> core::marker::UnsafeUnpin for aya::maps::queue::Queue<T, V> where T: core::marker::UnsafeUnpin, core::marker::PhantomData<V>: core::marker::UnsafeUnpin
-impl<T, V> core::panic::unwind_safe::RefUnwindSafe for aya::maps::queue::Queue<T, V> where T: core::panic::unwind_safe::RefUnwindSafe, core::marker::PhantomData<V>: core::panic::unwind_safe::RefUnwindSafe
-impl<T, V> core::panic::unwind_safe::UnwindSafe for aya::maps::queue::Queue<T, V> where T: core::panic::unwind_safe::UnwindSafe, core::marker::PhantomData<V>: core::panic::unwind_safe::UnwindSafe
+impl<T, V> core::marker::Freeze for aya::maps::queue::Queue<T, V> where T: core::marker::Freeze
+impl<T, V> core::marker::Send for aya::maps::queue::Queue<T, V> where T: core::marker::Send, V: core::marker::Send
+impl<T, V> core::marker::Sync for aya::maps::queue::Queue<T, V> where T: core::marker::Sync, V: core::marker::Sync
+impl<T, V> core::marker::Unpin for aya::maps::queue::Queue<T, V> where T: core::marker::Unpin, V: core::marker::Unpin
+impl<T, V> core::marker::UnsafeUnpin for aya::maps::queue::Queue<T, V> where T: core::marker::UnsafeUnpin
+impl<T, V> core::panic::unwind_safe::RefUnwindSafe for aya::maps::queue::Queue<T, V> where T: core::panic::unwind_safe::RefUnwindSafe, V: core::panic::unwind_safe::RefUnwindSafe
+impl<T, V> core::panic::unwind_safe::UnwindSafe for aya::maps::queue::Queue<T, V> where T: core::panic::unwind_safe::UnwindSafe, V: core::panic::unwind_safe::UnwindSafe
 pub mod aya::maps::ring_buf
 pub struct aya::maps::ring_buf::RingBuf<T>
 impl<T> aya::maps::ring_buf::RingBuf<T>
@@ -615,13 +663,13 @@ pub fn aya::maps::sk_storage::SkStorage<T, V>::fmt(&self, &mut core::fmt::Format
 impl<V: aya::Pod> core::convert::TryFrom<aya::maps::Map> for aya::maps::sk_storage::SkStorage<aya::maps::MapData, V>
 pub type aya::maps::sk_storage::SkStorage<aya::maps::MapData, V>::Error = aya::maps::MapError
 pub fn aya::maps::sk_storage::SkStorage<aya::maps::MapData, V>::try_from(aya::maps::Map) -> core::result::Result<Self, Self::Error>
-impl<T, V> core::marker::Freeze for aya::maps::sk_storage::SkStorage<T, V> where T: core::marker::Freeze, core::marker::PhantomData<V>: core::marker::Freeze
-impl<T, V> core::marker::Send for aya::maps::sk_storage::SkStorage<T, V> where T: core::marker::Send, core::marker::PhantomData<V>: core::marker::Send
-impl<T, V> core::marker::Sync for aya::maps::sk_storage::SkStorage<T, V> where T: core::marker::Sync, core::marker::PhantomData<V>: core::marker::Sync
-impl<T, V> core::marker::Unpin for aya::maps::sk_storage::SkStorage<T, V> where T: core::marker::Unpin, core::marker::PhantomData<V>: core::marker::Unpin
-impl<T, V> core::marker::UnsafeUnpin for aya::maps::sk_storage::SkStorage<T, V> where T: core::marker::UnsafeUnpin, core::marker::PhantomData<V>: core::marker::UnsafeUnpin
-impl<T, V> core::panic::unwind_safe::RefUnwindSafe for aya::maps::sk_storage::SkStorage<T, V> where T: core::panic::unwind_safe::RefUnwindSafe, core::marker::PhantomData<V>: core::panic::unwind_safe::RefUnwindSafe
-impl<T, V> core::panic::unwind_safe::UnwindSafe for aya::maps::sk_storage::SkStorage<T, V> where T: core::panic::unwind_safe::UnwindSafe, core::marker::PhantomData<V>: core::panic::unwind_safe::UnwindSafe
+impl<T, V> core::marker::Freeze for aya::maps::sk_storage::SkStorage<T, V> where T: core::marker::Freeze
+impl<T, V> core::marker::Send for aya::maps::sk_storage::SkStorage<T, V> where T: core::marker::Send, V: core::marker::Send
+impl<T, V> core::marker::Sync for aya::maps::sk_storage::SkStorage<T, V> where T: core::marker::Sync, V: core::marker::Sync
+impl<T, V> core::marker::Unpin for aya::maps::sk_storage::SkStorage<T, V> where T: core::marker::Unpin, V: core::marker::Unpin
+impl<T, V> core::marker::UnsafeUnpin for aya::maps::sk_storage::SkStorage<T, V> where T: core::marker::UnsafeUnpin
+impl<T, V> core::panic::unwind_safe::RefUnwindSafe for aya::maps::sk_storage::SkStorage<T, V> where T: core::panic::unwind_safe::RefUnwindSafe, V: core::panic::unwind_safe::RefUnwindSafe
+impl<T, V> core::panic::unwind_safe::UnwindSafe for aya::maps::sk_storage::SkStorage<T, V> where T: core::panic::unwind_safe::UnwindSafe, V: core::panic::unwind_safe::UnwindSafe
 pub mod aya::maps::sock
 pub struct aya::maps::sock::ReusePortSockArray<T>
 impl<T: core::borrow::Borrow<aya::maps::MapData>> aya::maps::ReusePortSockArray<T>
@@ -674,13 +722,13 @@ pub fn aya::maps::SockHash<T, K>::map(&self) -> &aya::maps::MapData
 impl<V: aya::Pod> core::convert::TryFrom<aya::maps::Map> for aya::maps::SockHash<aya::maps::MapData, V>
 pub type aya::maps::SockHash<aya::maps::MapData, V>::Error = aya::maps::MapError
 pub fn aya::maps::SockHash<aya::maps::MapData, V>::try_from(aya::maps::Map) -> core::result::Result<Self, Self::Error>
-impl<T, K> core::marker::Freeze for aya::maps::SockHash<T, K> where T: core::marker::Freeze, core::marker::PhantomData<K>: core::marker::Freeze
-impl<T, K> core::marker::Send for aya::maps::SockHash<T, K> where T: core::marker::Send, core::marker::PhantomData<K>: core::marker::Send
-impl<T, K> core::marker::Sync for aya::maps::SockHash<T, K> where T: core::marker::Sync, core::marker::PhantomData<K>: core::marker::Sync
-impl<T, K> core::marker::Unpin for aya::maps::SockHash<T, K> where T: core::marker::Unpin, core::marker::PhantomData<K>: core::marker::Unpin
-impl<T, K> core::marker::UnsafeUnpin for aya::maps::SockHash<T, K> where T: core::marker::UnsafeUnpin, core::marker::PhantomData<K>: core::marker::UnsafeUnpin
-impl<T, K> core::panic::unwind_safe::RefUnwindSafe for aya::maps::SockHash<T, K> where T: core::panic::unwind_safe::RefUnwindSafe, core::marker::PhantomData<K>: core::panic::unwind_safe::RefUnwindSafe
-impl<T, K> core::panic::unwind_safe::UnwindSafe for aya::maps::SockHash<T, K> where T: core::panic::unwind_safe::UnwindSafe, core::marker::PhantomData<K>: core::panic::unwind_safe::UnwindSafe
+impl<T, K> core::marker::Freeze for aya::maps::SockHash<T, K> where T: core::marker::Freeze
+impl<T, K> core::marker::Send for aya::maps::SockHash<T, K> where T: core::marker::Send, K: core::marker::Send
+impl<T, K> core::marker::Sync for aya::maps::SockHash<T, K> where T: core::marker::Sync, K: core::marker::Sync
+impl<T, K> core::marker::Unpin for aya::maps::SockHash<T, K> where T: core::marker::Unpin, K: core::marker::Unpin
+impl<T, K> core::marker::UnsafeUnpin for aya::maps::SockHash<T, K> where T: core::marker::UnsafeUnpin
+impl<T, K> core::panic::unwind_safe::RefUnwindSafe for aya::maps::SockHash<T, K> where T: core::panic::unwind_safe::RefUnwindSafe, K: core::panic::unwind_safe::RefUnwindSafe
+impl<T, K> core::panic::unwind_safe::UnwindSafe for aya::maps::SockHash<T, K> where T: core::panic::unwind_safe::UnwindSafe, K: core::panic::unwind_safe::UnwindSafe
 pub struct aya::maps::sock::SockMap<T>
 impl<T: core::borrow::Borrow<aya::maps::MapData>> aya::maps::SockMap<T>
 pub fn aya::maps::SockMap<T>::fd(&self) -> &aya::maps::sock::SockMapFd
@@ -738,13 +786,13 @@ pub fn aya::maps::stack::Stack<&'a mut aya::maps::MapData, V>::try_from(&'a mut 
 impl<V: aya::Pod> core::convert::TryFrom<aya::maps::Map> for aya::maps::stack::Stack<aya::maps::MapData, V>
 pub type aya::maps::stack::Stack<aya::maps::MapData, V>::Error = aya::maps::MapError
 pub fn aya::maps::stack::Stack<aya::maps::MapData, V>::try_from(aya::maps::Map) -> core::result::Result<Self, Self::Error>
-impl<T, V> core::marker::Freeze for aya::maps::stack::Stack<T, V> where T: core::marker::Freeze, core::marker::PhantomData<V>: core::marker::Freeze
-impl<T, V> core::marker::Send for aya::maps::stack::Stack<T, V> where T: core::marker::Send, core::marker::PhantomData<V>: core::marker::Send
-impl<T, V> core::marker::Sync for aya::maps::stack::Stack<T, V> where T: core::marker::Sync, core::marker::PhantomData<V>: core::marker::Sync
-impl<T, V> core::marker::Unpin for aya::maps::stack::Stack<T, V> where T: core::marker::Unpin, core::marker::PhantomData<V>: core::marker::Unpin
-impl<T, V> core::marker::UnsafeUnpin for aya::maps::stack::Stack<T, V> where T: core::marker::UnsafeUnpin, core::marker::PhantomData<V>: core::marker::UnsafeUnpin
-impl<T, V> core::panic::unwind_safe::RefUnwindSafe for aya::maps::stack::Stack<T, V> where T: core::panic::unwind_safe::RefUnwindSafe, core::marker::PhantomData<V>: core::panic::unwind_safe::RefUnwindSafe
-impl<T, V> core::panic::unwind_safe::UnwindSafe for aya::maps::stack::Stack<T, V> where T: core::panic::unwind_safe::UnwindSafe, core::marker::PhantomData<V>: core::panic::unwind_safe::UnwindSafe
+impl<T, V> core::marker::Freeze for aya::maps::stack::Stack<T, V> where T: core::marker::Freeze
+impl<T, V> core::marker::Send for aya::maps::stack::Stack<T, V> where T: core::marker::Send, V: core::marker::Send
+impl<T, V> core::marker::Sync for aya::maps::stack::Stack<T, V> where T: core::marker::Sync, V: core::marker::Sync
+impl<T, V> core::marker::Unpin for aya::maps::stack::Stack<T, V> where T: core::marker::Unpin, V: core::marker::Unpin
+impl<T, V> core::marker::UnsafeUnpin for aya::maps::stack::Stack<T, V> where T: core::marker::UnsafeUnpin
+impl<T, V> core::panic::unwind_safe::RefUnwindSafe for aya::maps::stack::Stack<T, V> where T: core::panic::unwind_safe::RefUnwindSafe, V: core::panic::unwind_safe::RefUnwindSafe
+impl<T, V> core::panic::unwind_safe::UnwindSafe for aya::maps::stack::Stack<T, V> where T: core::panic::unwind_safe::UnwindSafe, V: core::panic::unwind_safe::UnwindSafe
 pub mod aya::maps::stack_trace
 pub struct aya::maps::stack_trace::StackFrame
 pub aya::maps::stack_trace::StackFrame::ip: u64
@@ -1350,13 +1398,13 @@ pub fn aya::maps::array::Array<T, V>::map(&self) -> &aya::maps::MapData
 impl<V: aya::Pod> core::convert::TryFrom<aya::maps::Map> for aya::maps::array::Array<aya::maps::MapData, V>
 pub type aya::maps::array::Array<aya::maps::MapData, V>::Error = aya::maps::MapError
 pub fn aya::maps::array::Array<aya::maps::MapData, V>::try_from(aya::maps::Map) -> core::result::Result<Self, Self::Error>
-impl<T, V> core::marker::Freeze for aya::maps::array::Array<T, V> where T: core::marker::Freeze, core::marker::PhantomData<V>: core::marker::Freeze
-impl<T, V> core::marker::Send for aya::maps::array::Array<T, V> where T: core::marker::Send, core::marker::PhantomData<V>: core::marker::Send
-impl<T, V> core::marker::Sync for aya::maps::array::Array<T, V> where T: core::marker::Sync, core::marker::PhantomData<V>: core::marker::Sync
-impl<T, V> core::marker::Unpin for aya::maps::array::Array<T, V> where T: core::marker::Unpin, core::marker::PhantomData<V>: core::marker::Unpin
-impl<T, V> core::marker::UnsafeUnpin for aya::maps::array::Array<T, V> where T: core::marker::UnsafeUnpin, core::marker::PhantomData<V>: core::marker::UnsafeUnpin
-impl<T, V> core::panic::unwind_safe::RefUnwindSafe for aya::maps::array::Array<T, V> where T: core::panic::unwind_safe::RefUnwindSafe, core::marker::PhantomData<V>: core::panic::unwind_safe::RefUnwindSafe
-impl<T, V> core::panic::unwind_safe::UnwindSafe for aya::maps::array::Array<T, V> where T: core::panic::unwind_safe::UnwindSafe, core::marker::PhantomData<V>: core::panic::unwind_safe::UnwindSafe
+impl<T, V> core::marker::Freeze for aya::maps::array::Array<T, V> where T: core::marker::Freeze
+impl<T, V> core::marker::Send for aya::maps::array::Array<T, V> where T: core::marker::Send, V: core::marker::Send
+impl<T, V> core::marker::Sync for aya::maps::array::Array<T, V> where T: core::marker::Sync, V: core::marker::Sync
+impl<T, V> core::marker::Unpin for aya::maps::array::Array<T, V> where T: core::marker::Unpin, V: core::marker::Unpin
+impl<T, V> core::marker::UnsafeUnpin for aya::maps::array::Array<T, V> where T: core::marker::UnsafeUnpin
+impl<T, V> core::panic::unwind_safe::RefUnwindSafe for aya::maps::array::Array<T, V> where T: core::panic::unwind_safe::RefUnwindSafe, V: core::panic::unwind_safe::RefUnwindSafe
+impl<T, V> core::panic::unwind_safe::UnwindSafe for aya::maps::array::Array<T, V> where T: core::panic::unwind_safe::UnwindSafe, V: core::panic::unwind_safe::UnwindSafe
 pub struct aya::maps::ArrayOfMaps<T, V>
 impl<T: core::borrow::Borrow<aya::maps::MapData>, V: aya::maps::FromMapData> aya::maps::ArrayOfMaps<T, V>
 pub fn aya::maps::ArrayOfMaps<T, V>::get(&self, &u32, u64) -> core::result::Result<V, aya::maps::MapError>
@@ -1378,13 +1426,13 @@ pub fn aya::maps::ArrayOfMaps<T, V>::fmt(&self, &mut core::fmt::Formatter<'_>) -
 impl<V: aya::maps::InnerMap> core::convert::TryFrom<aya::maps::Map> for aya::maps::ArrayOfMaps<aya::maps::MapData, V>
 pub type aya::maps::ArrayOfMaps<aya::maps::MapData, V>::Error = aya::maps::MapError
 pub fn aya::maps::ArrayOfMaps<aya::maps::MapData, V>::try_from(aya::maps::Map) -> core::result::Result<Self, Self::Error>
-impl<T, V> core::marker::Freeze for aya::maps::ArrayOfMaps<T, V> where T: core::marker::Freeze, core::marker::PhantomData<V>: core::marker::Freeze
-impl<T, V> core::marker::Send for aya::maps::ArrayOfMaps<T, V> where T: core::marker::Send, core::marker::PhantomData<V>: core::marker::Send
-impl<T, V> core::marker::Sync for aya::maps::ArrayOfMaps<T, V> where T: core::marker::Sync, core::marker::PhantomData<V>: core::marker::Sync
-impl<T, V> core::marker::Unpin for aya::maps::ArrayOfMaps<T, V> where T: core::marker::Unpin, core::marker::PhantomData<V>: core::marker::Unpin
-impl<T, V> core::marker::UnsafeUnpin for aya::maps::ArrayOfMaps<T, V> where T: core::marker::UnsafeUnpin, core::marker::PhantomData<V>: core::marker::UnsafeUnpin
-impl<T, V> core::panic::unwind_safe::RefUnwindSafe for aya::maps::ArrayOfMaps<T, V> where T: core::panic::unwind_safe::RefUnwindSafe, core::marker::PhantomData<V>: core::panic::unwind_safe::RefUnwindSafe
-impl<T, V> core::panic::unwind_safe::UnwindSafe for aya::maps::ArrayOfMaps<T, V> where T: core::panic::unwind_safe::UnwindSafe, core::marker::PhantomData<V>: core::panic::unwind_safe::UnwindSafe
+impl<T, V> core::marker::Freeze for aya::maps::ArrayOfMaps<T, V> where T: core::marker::Freeze
+impl<T, V> core::marker::Send for aya::maps::ArrayOfMaps<T, V> where T: core::marker::Send, V: core::marker::Send
+impl<T, V> core::marker::Sync for aya::maps::ArrayOfMaps<T, V> where T: core::marker::Sync, V: core::marker::Sync
+impl<T, V> core::marker::Unpin for aya::maps::ArrayOfMaps<T, V> where T: core::marker::Unpin, V: core::marker::Unpin
+impl<T, V> core::marker::UnsafeUnpin for aya::maps::ArrayOfMaps<T, V> where T: core::marker::UnsafeUnpin
+impl<T, V> core::panic::unwind_safe::RefUnwindSafe for aya::maps::ArrayOfMaps<T, V> where T: core::panic::unwind_safe::RefUnwindSafe, V: core::panic::unwind_safe::RefUnwindSafe
+impl<T, V> core::panic::unwind_safe::UnwindSafe for aya::maps::ArrayOfMaps<T, V> where T: core::panic::unwind_safe::UnwindSafe, V: core::panic::unwind_safe::UnwindSafe
 pub struct aya::maps::BloomFilter<T, V: aya::Pod>
 impl<T: core::borrow::Borrow<aya::maps::MapData>, V: aya::Pod> aya::maps::bloom_filter::BloomFilter<T, V>
 pub fn aya::maps::bloom_filter::BloomFilter<T, V>::contains(&self, &V, u64) -> core::result::Result<(), aya::maps::MapError>
@@ -1405,13 +1453,13 @@ pub fn aya::maps::bloom_filter::BloomFilter<T, V>::fmt(&self, &mut core::fmt::Fo
 impl<V: aya::Pod> core::convert::TryFrom<aya::maps::Map> for aya::maps::bloom_filter::BloomFilter<aya::maps::MapData, V>
 pub type aya::maps::bloom_filter::BloomFilter<aya::maps::MapData, V>::Error = aya::maps::MapError
 pub fn aya::maps::bloom_filter::BloomFilter<aya::maps::MapData, V>::try_from(aya::maps::Map) -> core::result::Result<Self, Self::Error>
-impl<T, V> core::marker::Freeze for aya::maps::bloom_filter::BloomFilter<T, V> where T: core::marker::Freeze, core::marker::PhantomData<V>: core::marker::Freeze
-impl<T, V> core::marker::Send for aya::maps::bloom_filter::BloomFilter<T, V> where T: core::marker::Send, core::marker::PhantomData<V>: core::marker::Send
-impl<T, V> core::marker::Sync for aya::maps::bloom_filter::BloomFilter<T, V> where T: core::marker::Sync, core::marker::PhantomData<V>: core::marker::Sync
-impl<T, V> core::marker::Unpin for aya::maps::bloom_filter::BloomFilter<T, V> where T: core::marker::Unpin, core::marker::PhantomData<V>: core::marker::Unpin
-impl<T, V> core::marker::UnsafeUnpin for aya::maps::bloom_filter::BloomFilter<T, V> where T: core::marker::UnsafeUnpin, core::marker::PhantomData<V>: core::marker::UnsafeUnpin
-impl<T, V> core::panic::unwind_safe::RefUnwindSafe for aya::maps::bloom_filter::BloomFilter<T, V> where T: core::panic::unwind_safe::RefUnwindSafe, core::marker::PhantomData<V>: core::panic::unwind_safe::RefUnwindSafe
-impl<T, V> core::panic::unwind_safe::UnwindSafe for aya::maps::bloom_filter::BloomFilter<T, V> where T: core::panic::unwind_safe::UnwindSafe, core::marker::PhantomData<V>: core::panic::unwind_safe::UnwindSafe
+impl<T, V> core::marker::Freeze for aya::maps::bloom_filter::BloomFilter<T, V> where T: core::marker::Freeze
+impl<T, V> core::marker::Send for aya::maps::bloom_filter::BloomFilter<T, V> where T: core::marker::Send, V: core::marker::Send
+impl<T, V> core::marker::Sync for aya::maps::bloom_filter::BloomFilter<T, V> where T: core::marker::Sync, V: core::marker::Sync
+impl<T, V> core::marker::Unpin for aya::maps::bloom_filter::BloomFilter<T, V> where T: core::marker::Unpin, V: core::marker::Unpin
+impl<T, V> core::marker::UnsafeUnpin for aya::maps::bloom_filter::BloomFilter<T, V> where T: core::marker::UnsafeUnpin
+impl<T, V> core::panic::unwind_safe::RefUnwindSafe for aya::maps::bloom_filter::BloomFilter<T, V> where T: core::panic::unwind_safe::RefUnwindSafe, V: core::panic::unwind_safe::RefUnwindSafe
+impl<T, V> core::panic::unwind_safe::UnwindSafe for aya::maps::bloom_filter::BloomFilter<T, V> where T: core::panic::unwind_safe::UnwindSafe, V: core::panic::unwind_safe::UnwindSafe
 pub struct aya::maps::CgroupArray<T>
 impl<T: core::borrow::Borrow<aya::maps::MapData>> aya::maps::CgroupArray<T>
 pub fn aya::maps::CgroupArray<T>::len(&self) -> u32
@@ -1454,13 +1502,13 @@ pub fn aya::maps::cgroup_storage::CgroupStorage<T, V>::fmt(&self, &mut core::fmt
 impl<V: aya::Pod> core::convert::TryFrom<aya::maps::Map> for aya::maps::cgroup_storage::CgroupStorage<aya::maps::MapData, V>
 pub type aya::maps::cgroup_storage::CgroupStorage<aya::maps::MapData, V>::Error = aya::maps::MapError
 pub fn aya::maps::cgroup_storage::CgroupStorage<aya::maps::MapData, V>::try_from(aya::maps::Map) -> core::result::Result<Self, Self::Error>
-impl<T, V> core::marker::Freeze for aya::maps::cgroup_storage::CgroupStorage<T, V> where T: core::marker::Freeze, core::marker::PhantomData<V>: core::marker::Freeze
-impl<T, V> core::marker::Send for aya::maps::cgroup_storage::CgroupStorage<T, V> where T: core::marker::Send, core::marker::PhantomData<V>: core::marker::Send
-impl<T, V> core::marker::Sync for aya::maps::cgroup_storage::CgroupStorage<T, V> where T: core::marker::Sync, core::marker::PhantomData<V>: core::marker::Sync
-impl<T, V> core::marker::Unpin for aya::maps::cgroup_storage::CgroupStorage<T, V> where T: core::marker::Unpin, core::marker::PhantomData<V>: core::marker::Unpin
-impl<T, V> core::marker::UnsafeUnpin for aya::maps::cgroup_storage::CgroupStorage<T, V> where T: core::marker::UnsafeUnpin, core::marker::PhantomData<V>: core::marker::UnsafeUnpin
-impl<T, V> core::panic::unwind_safe::RefUnwindSafe for aya::maps::cgroup_storage::CgroupStorage<T, V> where T: core::panic::unwind_safe::RefUnwindSafe, core::marker::PhantomData<V>: core::panic::unwind_safe::RefUnwindSafe
-impl<T, V> core::panic::unwind_safe::UnwindSafe for aya::maps::cgroup_storage::CgroupStorage<T, V> where T: core::panic::unwind_safe::UnwindSafe, core::marker::PhantomData<V>: core::panic::unwind_safe::UnwindSafe
+impl<T, V> core::marker::Freeze for aya::maps::cgroup_storage::CgroupStorage<T, V> where T: core::marker::Freeze
+impl<T, V> core::marker::Send for aya::maps::cgroup_storage::CgroupStorage<T, V> where T: core::marker::Send, V: core::marker::Send
+impl<T, V> core::marker::Sync for aya::maps::cgroup_storage::CgroupStorage<T, V> where T: core::marker::Sync, V: core::marker::Sync
+impl<T, V> core::marker::Unpin for aya::maps::cgroup_storage::CgroupStorage<T, V> where T: core::marker::Unpin, V: core::marker::Unpin
+impl<T, V> core::marker::UnsafeUnpin for aya::maps::cgroup_storage::CgroupStorage<T, V> where T: core::marker::UnsafeUnpin
+impl<T, V> core::panic::unwind_safe::RefUnwindSafe for aya::maps::cgroup_storage::CgroupStorage<T, V> where T: core::panic::unwind_safe::RefUnwindSafe, V: core::panic::unwind_safe::RefUnwindSafe
+impl<T, V> core::panic::unwind_safe::UnwindSafe for aya::maps::cgroup_storage::CgroupStorage<T, V> where T: core::panic::unwind_safe::UnwindSafe, V: core::panic::unwind_safe::UnwindSafe
 pub struct aya::maps::CgroupStorageKey
 impl aya::maps::cgroup_storage::CgroupStorageKey
 pub const fn aya::maps::cgroup_storage::CgroupStorageKey::new(u64, u32) -> Self
@@ -1495,13 +1543,13 @@ pub fn aya::maps::cgrp_storage::CgrpStorage<T, V>::fmt(&self, &mut core::fmt::Fo
 impl<V: aya::Pod> core::convert::TryFrom<aya::maps::Map> for aya::maps::cgrp_storage::CgrpStorage<aya::maps::MapData, V>
 pub type aya::maps::cgrp_storage::CgrpStorage<aya::maps::MapData, V>::Error = aya::maps::MapError
 pub fn aya::maps::cgrp_storage::CgrpStorage<aya::maps::MapData, V>::try_from(aya::maps::Map) -> core::result::Result<Self, Self::Error>
-impl<T, V> core::marker::Freeze for aya::maps::cgrp_storage::CgrpStorage<T, V> where T: core::marker::Freeze, core::marker::PhantomData<V>: core::marker::Freeze
-impl<T, V> core::marker::Send for aya::maps::cgrp_storage::CgrpStorage<T, V> where T: core::marker::Send, core::marker::PhantomData<V>: core::marker::Send
-impl<T, V> core::marker::Sync for aya::maps::cgrp_storage::CgrpStorage<T, V> where T: core::marker::Sync, core::marker::PhantomData<V>: core::marker::Sync
-impl<T, V> core::marker::Unpin for aya::maps::cgrp_storage::CgrpStorage<T, V> where T: core::marker::Unpin, core::marker::PhantomData<V>: core::marker::Unpin
-impl<T, V> core::marker::UnsafeUnpin for aya::maps::cgrp_storage::CgrpStorage<T, V> where T: core::marker::UnsafeUnpin, core::marker::PhantomData<V>: core::marker::UnsafeUnpin
-impl<T, V> core::panic::unwind_safe::RefUnwindSafe for aya::maps::cgrp_storage::CgrpStorage<T, V> where T: core::panic::unwind_safe::RefUnwindSafe, core::marker::PhantomData<V>: core::panic::unwind_safe::RefUnwindSafe
-impl<T, V> core::panic::unwind_safe::UnwindSafe for aya::maps::cgrp_storage::CgrpStorage<T, V> where T: core::panic::unwind_safe::UnwindSafe, core::marker::PhantomData<V>: core::panic::unwind_safe::UnwindSafe
+impl<T, V> core::marker::Freeze for aya::maps::cgrp_storage::CgrpStorage<T, V> where T: core::marker::Freeze
+impl<T, V> core::marker::Send for aya::maps::cgrp_storage::CgrpStorage<T, V> where T: core::marker::Send, V: core::marker::Send
+impl<T, V> core::marker::Sync for aya::maps::cgrp_storage::CgrpStorage<T, V> where T: core::marker::Sync, V: core::marker::Sync
+impl<T, V> core::marker::Unpin for aya::maps::cgrp_storage::CgrpStorage<T, V> where T: core::marker::Unpin, V: core::marker::Unpin
+impl<T, V> core::marker::UnsafeUnpin for aya::maps::cgrp_storage::CgrpStorage<T, V> where T: core::marker::UnsafeUnpin
+impl<T, V> core::panic::unwind_safe::RefUnwindSafe for aya::maps::cgrp_storage::CgrpStorage<T, V> where T: core::panic::unwind_safe::RefUnwindSafe, V: core::panic::unwind_safe::RefUnwindSafe
+impl<T, V> core::panic::unwind_safe::UnwindSafe for aya::maps::cgrp_storage::CgrpStorage<T, V> where T: core::panic::unwind_safe::UnwindSafe, V: core::panic::unwind_safe::UnwindSafe
 pub struct aya::maps::CpuMap<T>
 impl<T: core::borrow::Borrow<aya::maps::MapData>> aya::maps::CpuMap<T>
 pub fn aya::maps::CpuMap<T>::get(&self, u32, u64) -> core::result::Result<aya::maps::xdp::cpu_map::CpuMapValue, aya::maps::MapError>
@@ -1612,13 +1660,13 @@ pub fn aya::maps::hash_map::HashMap<T, K, V>::get(&self, &K) -> core::result::Re
 pub fn aya::maps::hash_map::HashMap<T, K, V>::map(&self) -> &aya::maps::MapData
 impl<T: core::fmt::Debug, K: core::fmt::Debug, V: core::fmt::Debug> core::fmt::Debug for aya::maps::hash_map::HashMap<T, K, V>
 pub fn aya::maps::hash_map::HashMap<T, K, V>::fmt(&self, &mut core::fmt::Formatter<'_>) -> core::fmt::Result
-impl<T, K, V> core::marker::Freeze for aya::maps::hash_map::HashMap<T, K, V> where T: core::marker::Freeze, core::marker::PhantomData<(K, V)>: core::marker::Freeze
-impl<T, K, V> core::marker::Send for aya::maps::hash_map::HashMap<T, K, V> where T: core::marker::Send, core::marker::PhantomData<(K, V)>: core::marker::Send
-impl<T, K, V> core::marker::Sync for aya::maps::hash_map::HashMap<T, K, V> where T: core::marker::Sync, core::marker::PhantomData<(K, V)>: core::marker::Sync
-impl<T, K, V> core::marker::Unpin for aya::maps::hash_map::HashMap<T, K, V> where T: core::marker::Unpin, core::marker::PhantomData<(K, V)>: core::marker::Unpin
-impl<T, K, V> core::marker::UnsafeUnpin for aya::maps::hash_map::HashMap<T, K, V> where T: core::marker::UnsafeUnpin, core::marker::PhantomData<(K, V)>: core::marker::UnsafeUnpin
-impl<T, K, V> core::panic::unwind_safe::RefUnwindSafe for aya::maps::hash_map::HashMap<T, K, V> where T: core::panic::unwind_safe::RefUnwindSafe, core::marker::PhantomData<(K, V)>: core::panic::unwind_safe::RefUnwindSafe
-impl<T, K, V> core::panic::unwind_safe::UnwindSafe for aya::maps::hash_map::HashMap<T, K, V> where T: core::panic::unwind_safe::UnwindSafe, core::marker::PhantomData<(K, V)>: core::panic::unwind_safe::UnwindSafe
+impl<T, K, V> core::marker::Freeze for aya::maps::hash_map::HashMap<T, K, V> where T: core::marker::Freeze
+impl<T, K, V> core::marker::Send for aya::maps::hash_map::HashMap<T, K, V> where T: core::marker::Send, K: core::marker::Send, V: core::marker::Send
+impl<T, K, V> core::marker::Sync for aya::maps::hash_map::HashMap<T, K, V> where T: core::marker::Sync, K: core::marker::Sync, V: core::marker::Sync
+impl<T, K, V> core::marker::Unpin for aya::maps::hash_map::HashMap<T, K, V> where T: core::marker::Unpin, K: core::marker::Unpin, V: core::marker::Unpin
+impl<T, K, V> core::marker::UnsafeUnpin for aya::maps::hash_map::HashMap<T, K, V> where T: core::marker::UnsafeUnpin
+impl<T, K, V> core::panic::unwind_safe::RefUnwindSafe for aya::maps::hash_map::HashMap<T, K, V> where T: core::panic::unwind_safe::RefUnwindSafe, K: core::panic::unwind_safe::RefUnwindSafe, V: core::panic::unwind_safe::RefUnwindSafe
+impl<T, K, V> core::panic::unwind_safe::UnwindSafe for aya::maps::hash_map::HashMap<T, K, V> where T: core::panic::unwind_safe::UnwindSafe, K: core::panic::unwind_safe::UnwindSafe, V: core::panic::unwind_safe::UnwindSafe
 pub struct aya::maps::HashOfMaps<T, K, V>
 impl<K: aya::Pod, V> aya::maps::HashOfMaps<aya::maps::MapData, K, V>
 pub fn aya::maps::HashOfMaps<aya::maps::MapData, K, V>::pin<P: core::convert::AsRef<std::path::Path>>(self, P) -> core::result::Result<(), aya::pin::PinError>
@@ -1641,13 +1689,13 @@ pub type aya::maps::HashOfMaps<aya::maps::MapData, K, V>::Error = aya::maps::Map
 pub fn aya::maps::HashOfMaps<aya::maps::MapData, K, V>::try_from(aya::maps::Map) -> core::result::Result<Self, Self::Error>
 impl<T: core::fmt::Debug, K, V> core::fmt::Debug for aya::maps::HashOfMaps<T, K, V>
 pub fn aya::maps::HashOfMaps<T, K, V>::fmt(&self, &mut core::fmt::Formatter<'_>) -> core::fmt::Result
-impl<T, K, V> core::marker::Freeze for aya::maps::HashOfMaps<T, K, V> where T: core::marker::Freeze, core::marker::PhantomData<(K, V)>: core::marker::Freeze
-impl<T, K, V> core::marker::Send for aya::maps::HashOfMaps<T, K, V> where T: core::marker::Send, core::marker::PhantomData<(K, V)>: core::marker::Send
-impl<T, K, V> core::marker::Sync for aya::maps::HashOfMaps<T, K, V> where T: core::marker::Sync, core::marker::PhantomData<(K, V)>: core::marker::Sync
-impl<T, K, V> core::marker::Unpin for aya::maps::HashOfMaps<T, K, V> where T: core::marker::Unpin, core::marker::PhantomData<(K, V)>: core::marker::Unpin
-impl<T, K, V> core::marker::UnsafeUnpin for aya::maps::HashOfMaps<T, K, V> where T: core::marker::UnsafeUnpin, core::marker::PhantomData<(K, V)>: core::marker::UnsafeUnpin
-impl<T, K, V> core::panic::unwind_safe::RefUnwindSafe for aya::maps::HashOfMaps<T, K, V> where T: core::panic::unwind_safe::RefUnwindSafe, core::marker::PhantomData<(K, V)>: core::panic::unwind_safe::RefUnwindSafe
-impl<T, K, V> core::panic::unwind_safe::UnwindSafe for aya::maps::HashOfMaps<T, K, V> where T: core::panic::unwind_safe::UnwindSafe, core::marker::PhantomData<(K, V)>: core::panic::unwind_safe::UnwindSafe
+impl<T, K, V> core::marker::Freeze for aya::maps::HashOfMaps<T, K, V> where T: core::marker::Freeze
+impl<T, K, V> core::marker::Send for aya::maps::HashOfMaps<T, K, V> where T: core::marker::Send, K: core::marker::Send, V: core::marker::Send
+impl<T, K, V> core::marker::Sync for aya::maps::HashOfMaps<T, K, V> where T: core::marker::Sync, K: core::marker::Sync, V: core::marker::Sync
+impl<T, K, V> core::marker::Unpin for aya::maps::HashOfMaps<T, K, V> where T: core::marker::Unpin, K: core::marker::Unpin, V: core::marker::Unpin
+impl<T, K, V> core::marker::UnsafeUnpin for aya::maps::HashOfMaps<T, K, V> where T: core::marker::UnsafeUnpin
+impl<T, K, V> core::panic::unwind_safe::RefUnwindSafe for aya::maps::HashOfMaps<T, K, V> where T: core::panic::unwind_safe::RefUnwindSafe, K: core::panic::unwind_safe::RefUnwindSafe, V: core::panic::unwind_safe::RefUnwindSafe
+impl<T, K, V> core::panic::unwind_safe::UnwindSafe for aya::maps::HashOfMaps<T, K, V> where T: core::panic::unwind_safe::UnwindSafe, K: core::panic::unwind_safe::UnwindSafe, V: core::panic::unwind_safe::UnwindSafe
 pub struct aya::maps::InodeStorage<T, V: aya::Pod>
 impl<T: core::borrow::Borrow<aya::maps::MapData>, V: aya::Pod> aya::maps::inode_storage::InodeStorage<T, V>
 pub fn aya::maps::inode_storage::InodeStorage<T, V>::get(&self, &impl std::os::fd::raw::AsRawFd, u64) -> core::result::Result<V, aya::maps::MapError>
@@ -1667,13 +1715,13 @@ pub fn aya::maps::inode_storage::InodeStorage<T, V>::fmt(&self, &mut core::fmt::
 impl<V: aya::Pod> core::convert::TryFrom<aya::maps::Map> for aya::maps::inode_storage::InodeStorage<aya::maps::MapData, V>
 pub type aya::maps::inode_storage::InodeStorage<aya::maps::MapData, V>::Error = aya::maps::MapError
 pub fn aya::maps::inode_storage::InodeStorage<aya::maps::MapData, V>::try_from(aya::maps::Map) -> core::result::Result<Self, Self::Error>
-impl<T, V> core::marker::Freeze for aya::maps::inode_storage::InodeStorage<T, V> where T: core::marker::Freeze, core::marker::PhantomData<V>: core::marker::Freeze
-impl<T, V> core::marker::Send for aya::maps::inode_storage::InodeStorage<T, V> where T: core::marker::Send, core::marker::PhantomData<V>: core::marker::Send
-impl<T, V> core::marker::Sync for aya::maps::inode_storage::InodeStorage<T, V> where T: core::marker::Sync, core::marker::PhantomData<V>: core::marker::Sync
-impl<T, V> core::marker::Unpin for aya::maps::inode_storage::InodeStorage<T, V> where T: core::marker::Unpin, core::marker::PhantomData<V>: core::marker::Unpin
-impl<T, V> core::marker::UnsafeUnpin for aya::maps::inode_storage::InodeStorage<T, V> where T: core::marker::UnsafeUnpin, core::marker::PhantomData<V>: core::marker::UnsafeUnpin
-impl<T, V> core::panic::unwind_safe::RefUnwindSafe for aya::maps::inode_storage::InodeStorage<T, V> where T: core::panic::unwind_safe::RefUnwindSafe, core::marker::PhantomData<V>: core::panic::unwind_safe::RefUnwindSafe
-impl<T, V> core::panic::unwind_safe::UnwindSafe for aya::maps::inode_storage::InodeStorage<T, V> where T: core::panic::unwind_safe::UnwindSafe, core::marker::PhantomData<V>: core::panic::unwind_safe::UnwindSafe
+impl<T, V> core::marker::Freeze for aya::maps::inode_storage::InodeStorage<T, V> where T: core::marker::Freeze
+impl<T, V> core::marker::Send for aya::maps::inode_storage::InodeStorage<T, V> where T: core::marker::Send, V: core::marker::Send
+impl<T, V> core::marker::Sync for aya::maps::inode_storage::InodeStorage<T, V> where T: core::marker::Sync, V: core::marker::Sync
+impl<T, V> core::marker::Unpin for aya::maps::inode_storage::InodeStorage<T, V> where T: core::marker::Unpin, V: core::marker::Unpin
+impl<T, V> core::marker::UnsafeUnpin for aya::maps::inode_storage::InodeStorage<T, V> where T: core::marker::UnsafeUnpin
+impl<T, V> core::panic::unwind_safe::RefUnwindSafe for aya::maps::inode_storage::InodeStorage<T, V> where T: core::panic::unwind_safe::RefUnwindSafe, V: core::panic::unwind_safe::RefUnwindSafe
+impl<T, V> core::panic::unwind_safe::UnwindSafe for aya::maps::inode_storage::InodeStorage<T, V> where T: core::panic::unwind_safe::UnwindSafe, V: core::panic::unwind_safe::UnwindSafe
 pub struct aya::maps::LpmTrie<T, K, V>
 impl<K: aya::Pod, V: aya::Pod> aya::maps::lpm_trie::LpmTrie<aya::maps::MapData, K, V>
 pub fn aya::maps::lpm_trie::LpmTrie<aya::maps::MapData, K, V>::create(u32, u32) -> core::result::Result<Self, aya::maps::MapError>
@@ -1704,19 +1752,20 @@ pub fn aya::maps::lpm_trie::LpmTrie<T, K, V>::get(&self, &aya::maps::lpm_trie::K
 pub fn aya::maps::lpm_trie::LpmTrie<T, K, V>::map(&self) -> &aya::maps::MapData
 impl<T: core::fmt::Debug, K: core::fmt::Debug, V: core::fmt::Debug> core::fmt::Debug for aya::maps::lpm_trie::LpmTrie<T, K, V>
 pub fn aya::maps::lpm_trie::LpmTrie<T, K, V>::fmt(&self, &mut core::fmt::Formatter<'_>) -> core::fmt::Result
-impl<T, K, V> core::marker::Freeze for aya::maps::lpm_trie::LpmTrie<T, K, V> where T: core::marker::Freeze, core::marker::PhantomData<(K, V)>: core::marker::Freeze
-impl<T, K, V> core::marker::Send for aya::maps::lpm_trie::LpmTrie<T, K, V> where T: core::marker::Send, core::marker::PhantomData<(K, V)>: core::marker::Send
-impl<T, K, V> core::marker::Sync for aya::maps::lpm_trie::LpmTrie<T, K, V> where T: core::marker::Sync, core::marker::PhantomData<(K, V)>: core::marker::Sync
-impl<T, K, V> core::marker::Unpin for aya::maps::lpm_trie::LpmTrie<T, K, V> where T: core::marker::Unpin, core::marker::PhantomData<(K, V)>: core::marker::Unpin
-impl<T, K, V> core::marker::UnsafeUnpin for aya::maps::lpm_trie::LpmTrie<T, K, V> where T: core::marker::UnsafeUnpin, core::marker::PhantomData<(K, V)>: core::marker::UnsafeUnpin
-impl<T, K, V> core::panic::unwind_safe::RefUnwindSafe for aya::maps::lpm_trie::LpmTrie<T, K, V> where T: core::panic::unwind_safe::RefUnwindSafe, core::marker::PhantomData<(K, V)>: core::panic::unwind_safe::RefUnwindSafe
-impl<T, K, V> core::panic::unwind_safe::UnwindSafe for aya::maps::lpm_trie::LpmTrie<T, K, V> where T: core::panic::unwind_safe::UnwindSafe, core::marker::PhantomData<(K, V)>: core::panic::unwind_safe::UnwindSafe
+impl<T, K, V> core::marker::Freeze for aya::maps::lpm_trie::LpmTrie<T, K, V> where T: core::marker::Freeze
+impl<T, K, V> core::marker::Send for aya::maps::lpm_trie::LpmTrie<T, K, V> where T: core::marker::Send, K: core::marker::Send, V: core::marker::Send
+impl<T, K, V> core::marker::Sync for aya::maps::lpm_trie::LpmTrie<T, K, V> where T: core::marker::Sync, K: core::marker::Sync, V: core::marker::Sync
+impl<T, K, V> core::marker::Unpin for aya::maps::lpm_trie::LpmTrie<T, K, V> where T: core::marker::Unpin, K: core::marker::Unpin, V: core::marker::Unpin
+impl<T, K, V> core::marker::UnsafeUnpin for aya::maps::lpm_trie::LpmTrie<T, K, V> where T: core::marker::UnsafeUnpin
+impl<T, K, V> core::panic::unwind_safe::RefUnwindSafe for aya::maps::lpm_trie::LpmTrie<T, K, V> where T: core::panic::unwind_safe::RefUnwindSafe, K: core::panic::unwind_safe::RefUnwindSafe, V: core::panic::unwind_safe::RefUnwindSafe
+impl<T, K, V> core::panic::unwind_safe::UnwindSafe for aya::maps::lpm_trie::LpmTrie<T, K, V> where T: core::panic::unwind_safe::UnwindSafe, K: core::panic::unwind_safe::UnwindSafe, V: core::panic::unwind_safe::UnwindSafe
 pub struct aya::maps::MapData
 impl aya::maps::MapData
-pub fn aya::maps::MapData::create(aya_obj::maps::Map, &str, core::option::Option<std::os::fd::owned::BorrowedFd<'_>>) -> core::result::Result<Self, aya::maps::MapError>
+pub fn aya::maps::MapData::create(aya_obj::maps::Map, &str, core::option::Option<std::os::fd::owned::BorrowedFd<'_>>, core::option::Option<std::os::fd::owned::BorrowedFd<'_>>, aya::features::Features) -> core::result::Result<Self, aya::maps::MapError>
 pub const fn aya::maps::MapData::fd(&self) -> &aya::maps::MapFd
 pub fn aya::maps::MapData::from_fd(std::os::fd::owned::OwnedFd) -> core::result::Result<Self, aya::maps::MapError>
 pub fn aya::maps::MapData::from_id(u32) -> core::result::Result<Self, aya::maps::MapError>
+pub fn aya::maps::MapData::from_id_with_token(u32, std::os::fd::owned::BorrowedFd<'_>) -> core::result::Result<Self, aya::maps::MapError>
 pub fn aya::maps::MapData::from_pin<P: core::convert::AsRef<std::path::Path>>(P) -> core::result::Result<Self, aya::maps::MapError>
 pub fn aya::maps::MapData::info(&self) -> core::result::Result<aya::maps::MapInfo, aya::maps::MapError>
 pub fn aya::maps::MapData::pin<P: core::convert::AsRef<std::path::Path>>(&self, P) -> core::result::Result<(), aya::pin::PinError>
@@ -1767,24 +1816,24 @@ pub struct aya::maps::MapIter<'coll, K: aya::Pod, V, I: aya::maps::IterableMap<K
 impl<K: aya::Pod, V, I: aya::maps::IterableMap<K, V>> core::iter::traits::iterator::Iterator for aya::maps::MapIter<'_, K, V, I>
 pub type aya::maps::MapIter<'_, K, V, I>::Item = core::result::Result<(K, V), aya::maps::MapError>
 pub fn aya::maps::MapIter<'_, K, V, I>::next(&mut self) -> core::option::Option<Self::Item>
-impl<'coll, K, V, I> core::marker::Freeze for aya::maps::MapIter<'coll, K, V, I> where aya::maps::MapKeys<'coll, K>: core::marker::Freeze, &'coll I: core::marker::Freeze, core::marker::PhantomData<V>: core::marker::Freeze
-impl<'coll, K, V, I> core::marker::Send for aya::maps::MapIter<'coll, K, V, I> where aya::maps::MapKeys<'coll, K>: core::marker::Send, &'coll I: core::marker::Send, core::marker::PhantomData<V>: core::marker::Send
-impl<'coll, K, V, I> core::marker::Sync for aya::maps::MapIter<'coll, K, V, I> where aya::maps::MapKeys<'coll, K>: core::marker::Sync, &'coll I: core::marker::Sync, core::marker::PhantomData<V>: core::marker::Sync
-impl<'coll, K, V, I> core::marker::Unpin for aya::maps::MapIter<'coll, K, V, I> where aya::maps::MapKeys<'coll, K>: core::marker::Unpin, &'coll I: core::marker::Unpin, core::marker::PhantomData<V>: core::marker::Unpin
-impl<'coll, K, V, I> core::marker::UnsafeUnpin for aya::maps::MapIter<'coll, K, V, I> where aya::maps::MapKeys<'coll, K>: core::marker::UnsafeUnpin, &'coll I: core::marker::UnsafeUnpin, core::marker::PhantomData<V>: core::marker::UnsafeUnpin
-impl<'coll, K, V, I> core::panic::unwind_safe::RefUnwindSafe for aya::maps::MapIter<'coll, K, V, I> where aya::maps::MapKeys<'coll, K>: core::panic::unwind_safe::RefUnwindSafe, &'coll I: core::panic::unwind_safe::RefUnwindSafe, core::marker::PhantomData<V>: core::panic::unwind_safe::RefUnwindSafe
-impl<'coll, K, V, I> core::panic::unwind_safe::UnwindSafe for aya::maps::MapIter<'coll, K, V, I> where aya::maps::MapKeys<'coll, K>: core::panic::unwind_safe::UnwindSafe, &'coll I: core::panic::unwind_safe::UnwindSafe, core::marker::PhantomData<V>: core::panic::unwind_safe::UnwindSafe
+impl<'coll, K, V, I> core::marker::Freeze for aya::maps::MapIter<'coll, K, V, I> where K: core::marker::Freeze
+impl<'coll, K, V, I> core::marker::Send for aya::maps::MapIter<'coll, K, V, I> where I: core::marker::Sync, V: core::marker::Send, K: core::marker::Send
+impl<'coll, K, V, I> core::marker::Sync for aya::maps::MapIter<'coll, K, V, I> where I: core::marker::Sync, V: core::marker::Sync, K: core::marker::Sync
+impl<'coll, K, V, I> core::marker::Unpin for aya::maps::MapIter<'coll, K, V, I> where V: core::marker::Unpin, K: core::marker::Unpin
+impl<'coll, K, V, I> core::marker::UnsafeUnpin for aya::maps::MapIter<'coll, K, V, I> where K: core::marker::UnsafeUnpin
+impl<'coll, K, V, I> core::panic::unwind_safe::RefUnwindSafe for aya::maps::MapIter<'coll, K, V, I> where I: core::panic::unwind_safe::RefUnwindSafe, V: core::panic::unwind_safe::RefUnwindSafe, K: core::panic::unwind_safe::RefUnwindSafe
+impl<'coll, K, V, I> core::panic::unwind_safe::UnwindSafe for aya::maps::MapIter<'coll, K, V, I> where I: core::panic::unwind_safe::RefUnwindSafe, V: core::panic::unwind_safe::UnwindSafe, K: core::panic::unwind_safe::UnwindSafe
 pub struct aya::maps::MapKeys<'coll, K: aya::Pod>
 impl<K: aya::Pod> core::iter::traits::iterator::Iterator for aya::maps::MapKeys<'_, K>
 pub type aya::maps::MapKeys<'_, K>::Item = core::result::Result<K, aya::maps::MapError>
 pub fn aya::maps::MapKeys<'_, K>::next(&mut self) -> core::option::Option<core::result::Result<K, aya::maps::MapError>>
-impl<'coll, K> core::marker::Freeze for aya::maps::MapKeys<'coll, K> where core::option::Option<K>: core::marker::Freeze
-impl<'coll, K> core::marker::Send for aya::maps::MapKeys<'coll, K> where core::option::Option<K>: core::marker::Send
-impl<'coll, K> core::marker::Sync for aya::maps::MapKeys<'coll, K> where core::option::Option<K>: core::marker::Sync
-impl<'coll, K> core::marker::Unpin for aya::maps::MapKeys<'coll, K> where core::option::Option<K>: core::marker::Unpin
-impl<'coll, K> core::marker::UnsafeUnpin for aya::maps::MapKeys<'coll, K> where core::option::Option<K>: core::marker::UnsafeUnpin
-impl<'coll, K> core::panic::unwind_safe::RefUnwindSafe for aya::maps::MapKeys<'coll, K> where core::option::Option<K>: core::panic::unwind_safe::RefUnwindSafe
-impl<'coll, K> core::panic::unwind_safe::UnwindSafe for aya::maps::MapKeys<'coll, K> where core::option::Option<K>: core::panic::unwind_safe::UnwindSafe
+impl<'coll, K> core::marker::Freeze for aya::maps::MapKeys<'coll, K> where K: core::marker::Freeze
+impl<'coll, K> core::marker::Send for aya::maps::MapKeys<'coll, K> where K: core::marker::Send
+impl<'coll, K> core::marker::Sync for aya::maps::MapKeys<'coll, K> where K: core::marker::Sync
+impl<'coll, K> core::marker::Unpin for aya::maps::MapKeys<'coll, K> where K: core::marker::Unpin
+impl<'coll, K> core::marker::UnsafeUnpin for aya::maps::MapKeys<'coll, K> where K: core::marker::UnsafeUnpin
+impl<'coll, K> core::panic::unwind_safe::RefUnwindSafe for aya::maps::MapKeys<'coll, K> where K: core::panic::unwind_safe::RefUnwindSafe
+impl<'coll, K> core::panic::unwind_safe::UnwindSafe for aya::maps::MapKeys<'coll, K> where K: core::panic::unwind_safe::UnwindSafe
 pub struct aya::maps::PerCpuArray<T, V: aya::Pod>
 impl<T: core::borrow::Borrow<aya::maps::MapData>, V: aya::Pod> aya::maps::PerCpuArray<T, V>
 pub fn aya::maps::PerCpuArray<T, V>::get(&self, &u32, u64) -> core::result::Result<aya::maps::PerCpuValues<V>, aya::maps::MapError>
@@ -1808,13 +1857,13 @@ pub fn aya::maps::PerCpuArray<T, V>::map(&self) -> &aya::maps::MapData
 impl<V: aya::Pod> core::convert::TryFrom<aya::maps::Map> for aya::maps::PerCpuArray<aya::maps::MapData, V>
 pub type aya::maps::PerCpuArray<aya::maps::MapData, V>::Error = aya::maps::MapError
 pub fn aya::maps::PerCpuArray<aya::maps::MapData, V>::try_from(aya::maps::Map) -> core::result::Result<Self, Self::Error>
-impl<T, V> core::marker::Freeze for aya::maps::PerCpuArray<T, V> where T: core::marker::Freeze, core::marker::PhantomData<V>: core::marker::Freeze
-impl<T, V> core::marker::Send for aya::maps::PerCpuArray<T, V> where T: core::marker::Send, core::marker::PhantomData<V>: core::marker::Send
-impl<T, V> core::marker::Sync for aya::maps::PerCpuArray<T, V> where T: core::marker::Sync, core::marker::PhantomData<V>: core::marker::Sync
-impl<T, V> core::marker::Unpin for aya::maps::PerCpuArray<T, V> where T: core::marker::Unpin, core::marker::PhantomData<V>: core::marker::Unpin
-impl<T, V> core::marker::UnsafeUnpin for aya::maps::PerCpuArray<T, V> where T: core::marker::UnsafeUnpin, core::marker::PhantomData<V>: core::marker::UnsafeUnpin
-impl<T, V> core::panic::unwind_safe::RefUnwindSafe for aya::maps::PerCpuArray<T, V> where T: core::panic::unwind_safe::RefUnwindSafe, core::marker::PhantomData<V>: core::panic::unwind_safe::RefUnwindSafe
-impl<T, V> core::panic::unwind_safe::UnwindSafe for aya::maps::PerCpuArray<T, V> where T: core::panic::unwind_safe::UnwindSafe, core::marker::PhantomData<V>: core::panic::unwind_safe::UnwindSafe
+impl<T, V> core::marker::Freeze for aya::maps::PerCpuArray<T, V> where T: core::marker::Freeze
+impl<T, V> core::marker::Send for aya::maps::PerCpuArray<T, V> where T: core::marker::Send, V: core::marker::Send
+impl<T, V> core::marker::Sync for aya::maps::PerCpuArray<T, V> where T: core::marker::Sync, V: core::marker::Sync
+impl<T, V> core::marker::Unpin for aya::maps::PerCpuArray<T, V> where T: core::marker::Unpin, V: core::marker::Unpin
+impl<T, V> core::marker::UnsafeUnpin for aya::maps::PerCpuArray<T, V> where T: core::marker::UnsafeUnpin
+impl<T, V> core::panic::unwind_safe::RefUnwindSafe for aya::maps::PerCpuArray<T, V> where T: core::panic::unwind_safe::RefUnwindSafe, V: core::panic::unwind_safe::RefUnwindSafe
+impl<T, V> core::panic::unwind_safe::UnwindSafe for aya::maps::PerCpuArray<T, V> where T: core::panic::unwind_safe::UnwindSafe, V: core::panic::unwind_safe::UnwindSafe
 pub struct aya::maps::PerCpuCgroupStorage<T, V: aya::Pod>
 impl<T: core::borrow::Borrow<aya::maps::MapData>, V: aya::Pod> aya::maps::cgroup_storage::PerCpuCgroupStorage<T, V>
 pub fn aya::maps::cgroup_storage::PerCpuCgroupStorage<T, V>::get(&self, aya::maps::cgroup_storage::CgroupStorageKey, u64) -> core::result::Result<aya::maps::PerCpuValues<V>, aya::maps::MapError>
@@ -1833,13 +1882,13 @@ pub fn aya::maps::cgroup_storage::PerCpuCgroupStorage<T, V>::fmt(&self, &mut cor
 impl<V: aya::Pod> core::convert::TryFrom<aya::maps::Map> for aya::maps::cgroup_storage::PerCpuCgroupStorage<aya::maps::MapData, V>
 pub type aya::maps::cgroup_storage::PerCpuCgroupStorage<aya::maps::MapData, V>::Error = aya::maps::MapError
 pub fn aya::maps::cgroup_storage::PerCpuCgroupStorage<aya::maps::MapData, V>::try_from(aya::maps::Map) -> core::result::Result<Self, Self::Error>
-impl<T, V> core::marker::Freeze for aya::maps::cgroup_storage::PerCpuCgroupStorage<T, V> where T: core::marker::Freeze, core::marker::PhantomData<V>: core::marker::Freeze
-impl<T, V> core::marker::Send for aya::maps::cgroup_storage::PerCpuCgroupStorage<T, V> where T: core::marker::Send, core::marker::PhantomData<V>: core::marker::Send
-impl<T, V> core::marker::Sync for aya::maps::cgroup_storage::PerCpuCgroupStorage<T, V> where T: core::marker::Sync, core::marker::PhantomData<V>: core::marker::Sync
-impl<T, V> core::marker::Unpin for aya::maps::cgroup_storage::PerCpuCgroupStorage<T, V> where T: core::marker::Unpin, core::marker::PhantomData<V>: core::marker::Unpin
-impl<T, V> core::marker::UnsafeUnpin for aya::maps::cgroup_storage::PerCpuCgroupStorage<T, V> where T: core::marker::UnsafeUnpin, core::marker::PhantomData<V>: core::marker::UnsafeUnpin
-impl<T, V> core::panic::unwind_safe::RefUnwindSafe for aya::maps::cgroup_storage::PerCpuCgroupStorage<T, V> where T: core::panic::unwind_safe::RefUnwindSafe, core::marker::PhantomData<V>: core::panic::unwind_safe::RefUnwindSafe
-impl<T, V> core::panic::unwind_safe::UnwindSafe for aya::maps::cgroup_storage::PerCpuCgroupStorage<T, V> where T: core::panic::unwind_safe::UnwindSafe, core::marker::PhantomData<V>: core::panic::unwind_safe::UnwindSafe
+impl<T, V> core::marker::Freeze for aya::maps::cgroup_storage::PerCpuCgroupStorage<T, V> where T: core::marker::Freeze
+impl<T, V> core::marker::Send for aya::maps::cgroup_storage::PerCpuCgroupStorage<T, V> where T: core::marker::Send, V: core::marker::Send
+impl<T, V> core::marker::Sync for aya::maps::cgroup_storage::PerCpuCgroupStorage<T, V> where T: core::marker::Sync, V: core::marker::Sync
+impl<T, V> core::marker::Unpin for aya::maps::cgroup_storage::PerCpuCgroupStorage<T, V> where T: core::marker::Unpin, V: core::marker::Unpin
+impl<T, V> core::marker::UnsafeUnpin for aya::maps::cgroup_storage::PerCpuCgroupStorage<T, V> where T: core::marker::UnsafeUnpin
+impl<T, V> core::panic::unwind_safe::RefUnwindSafe for aya::maps::cgroup_storage::PerCpuCgroupStorage<T, V> where T: core::panic::unwind_safe::RefUnwindSafe, V: core::panic::unwind_safe::RefUnwindSafe
+impl<T, V> core::panic::unwind_safe::UnwindSafe for aya::maps::cgroup_storage::PerCpuCgroupStorage<T, V> where T: core::panic::unwind_safe::UnwindSafe, V: core::panic::unwind_safe::UnwindSafe
 pub struct aya::maps::PerCpuHashMap<T, K: aya::Pod, V: aya::Pod>
 impl<K: aya::Pod, V: aya::Pod> aya::maps::hash_map::PerCpuHashMap<aya::maps::MapData, K, V>
 pub fn aya::maps::hash_map::PerCpuHashMap<aya::maps::MapData, K, V>::create(u32, u32) -> core::result::Result<Self, aya::maps::MapError>
@@ -1868,13 +1917,13 @@ pub fn aya::maps::hash_map::PerCpuHashMap<aya::maps::MapData, K, V>::try_from(ay
 impl<T: core::borrow::Borrow<aya::maps::MapData>, K: aya::Pod, V: aya::Pod> aya::maps::IterableMap<K, aya::maps::PerCpuValues<V>> for aya::maps::hash_map::PerCpuHashMap<T, K, V>
 pub fn aya::maps::hash_map::PerCpuHashMap<T, K, V>::get(&self, &K) -> core::result::Result<aya::maps::PerCpuValues<V>, aya::maps::MapError>
 pub fn aya::maps::hash_map::PerCpuHashMap<T, K, V>::map(&self) -> &aya::maps::MapData
-impl<T, K, V> core::marker::Freeze for aya::maps::hash_map::PerCpuHashMap<T, K, V> where T: core::marker::Freeze, core::marker::PhantomData<(K, V)>: core::marker::Freeze
-impl<T, K, V> core::marker::Send for aya::maps::hash_map::PerCpuHashMap<T, K, V> where T: core::marker::Send, core::marker::PhantomData<(K, V)>: core::marker::Send
-impl<T, K, V> core::marker::Sync for aya::maps::hash_map::PerCpuHashMap<T, K, V> where T: core::marker::Sync, core::marker::PhantomData<(K, V)>: core::marker::Sync
-impl<T, K, V> core::marker::Unpin for aya::maps::hash_map::PerCpuHashMap<T, K, V> where T: core::marker::Unpin, core::marker::PhantomData<(K, V)>: core::marker::Unpin
-impl<T, K, V> core::marker::UnsafeUnpin for aya::maps::hash_map::PerCpuHashMap<T, K, V> where T: core::marker::UnsafeUnpin, core::marker::PhantomData<(K, V)>: core::marker::UnsafeUnpin
-impl<T, K, V> core::panic::unwind_safe::RefUnwindSafe for aya::maps::hash_map::PerCpuHashMap<T, K, V> where T: core::panic::unwind_safe::RefUnwindSafe, core::marker::PhantomData<(K, V)>: core::panic::unwind_safe::RefUnwindSafe
-impl<T, K, V> core::panic::unwind_safe::UnwindSafe for aya::maps::hash_map::PerCpuHashMap<T, K, V> where T: core::panic::unwind_safe::UnwindSafe, core::marker::PhantomData<(K, V)>: core::panic::unwind_safe::UnwindSafe
+impl<T, K, V> core::marker::Freeze for aya::maps::hash_map::PerCpuHashMap<T, K, V> where T: core::marker::Freeze
+impl<T, K, V> core::marker::Send for aya::maps::hash_map::PerCpuHashMap<T, K, V> where T: core::marker::Send, K: core::marker::Send, V: core::marker::Send
+impl<T, K, V> core::marker::Sync for aya::maps::hash_map::PerCpuHashMap<T, K, V> where T: core::marker::Sync, K: core::marker::Sync, V: core::marker::Sync
+impl<T, K, V> core::marker::Unpin for aya::maps::hash_map::PerCpuHashMap<T, K, V> where T: core::marker::Unpin, K: core::marker::Unpin, V: core::marker::Unpin
+impl<T, K, V> core::marker::UnsafeUnpin for aya::maps::hash_map::PerCpuHashMap<T, K, V> where T: core::marker::UnsafeUnpin
+impl<T, K, V> core::panic::unwind_safe::RefUnwindSafe for aya::maps::hash_map::PerCpuHashMap<T, K, V> where T: core::panic::unwind_safe::RefUnwindSafe, K: core::panic::unwind_safe::RefUnwindSafe, V: core::panic::unwind_safe::RefUnwindSafe
+impl<T, K, V> core::panic::unwind_safe::UnwindSafe for aya::maps::hash_map::PerCpuHashMap<T, K, V> where T: core::panic::unwind_safe::UnwindSafe, K: core::panic::unwind_safe::UnwindSafe, V: core::panic::unwind_safe::UnwindSafe
 pub struct aya::maps::PerCpuValues<T: aya::Pod>
 impl<T: aya::Pod> core::convert::TryFrom<alloc::vec::Vec<T>> for aya::maps::PerCpuValues<T>
 pub type aya::maps::PerCpuValues<T>::Error = core::io::error::Error
@@ -1890,13 +1939,13 @@ pub fn aya::maps::PerCpuArray<T, V>::get(&self, &u32) -> core::result::Result<ay
 pub fn aya::maps::PerCpuArray<T, V>::map(&self) -> &aya::maps::MapData
 impl<T: core::fmt::Debug + aya::Pod> core::fmt::Debug for aya::maps::PerCpuValues<T>
 pub fn aya::maps::PerCpuValues<T>::fmt(&self, &mut core::fmt::Formatter<'_>) -> core::fmt::Result
-impl<T> core::marker::Freeze for aya::maps::PerCpuValues<T> where alloc::boxed::Box<[T]>: core::marker::Freeze
-impl<T> core::marker::Send for aya::maps::PerCpuValues<T> where alloc::boxed::Box<[T]>: core::marker::Send
-impl<T> core::marker::Sync for aya::maps::PerCpuValues<T> where alloc::boxed::Box<[T]>: core::marker::Sync
-impl<T> core::marker::Unpin for aya::maps::PerCpuValues<T> where alloc::boxed::Box<[T]>: core::marker::Unpin
-impl<T> core::marker::UnsafeUnpin for aya::maps::PerCpuValues<T> where alloc::boxed::Box<[T]>: core::marker::UnsafeUnpin
-impl<T> core::panic::unwind_safe::RefUnwindSafe for aya::maps::PerCpuValues<T> where alloc::boxed::Box<[T]>: core::panic::unwind_safe::RefUnwindSafe
-impl<T> core::panic::unwind_safe::UnwindSafe for aya::maps::PerCpuValues<T> where alloc::boxed::Box<[T]>: core::panic::unwind_safe::UnwindSafe
+impl<T> core::marker::Freeze for aya::maps::PerCpuValues<T>
+impl<T> core::marker::Send for aya::maps::PerCpuValues<T> where T: core::marker::Send
+impl<T> core::marker::Sync for aya::maps::PerCpuValues<T> where T: core::marker::Sync
+impl<T> core::marker::Unpin for aya::maps::PerCpuValues<T>
+impl<T> core::marker::UnsafeUnpin for aya::maps::PerCpuValues<T>
+impl<T> core::panic::unwind_safe::RefUnwindSafe for aya::maps::PerCpuValues<T> where T: core::panic::unwind_safe::RefUnwindSafe
+impl<T> core::panic::unwind_safe::UnwindSafe for aya::maps::PerCpuValues<T> where T: core::panic::unwind_safe::UnwindSafe
 pub struct aya::maps::PerfEventArray<T>
 impl<T: core::borrow::Borrow<aya::maps::MapData>> aya::maps::perf::PerfEventArray<T>
 pub fn aya::maps::perf::PerfEventArray<T>::pin<P: core::convert::AsRef<std::path::Path>>(&self, P) -> core::result::Result<(), aya::pin::PinError>
@@ -1911,13 +1960,13 @@ pub fn aya::maps::perf::PerfEventArray<&'a aya::maps::MapData>::try_from(&'a aya
 impl<'a> core::convert::TryFrom<&'a mut aya::maps::Map> for aya::maps::perf::PerfEventArray<&'a mut aya::maps::MapData>
 pub type aya::maps::perf::PerfEventArray<&'a mut aya::maps::MapData>::Error = aya::maps::MapError
 pub fn aya::maps::perf::PerfEventArray<&'a mut aya::maps::MapData>::try_from(&'a mut aya::maps::Map) -> core::result::Result<Self, Self::Error>
-impl<T> core::marker::Freeze for aya::maps::perf::PerfEventArray<T> where alloc::sync::Arc<T>: core::marker::Freeze
-impl<T> core::marker::Send for aya::maps::perf::PerfEventArray<T> where alloc::sync::Arc<T>: core::marker::Send
-impl<T> core::marker::Sync for aya::maps::perf::PerfEventArray<T> where alloc::sync::Arc<T>: core::marker::Sync
-impl<T> core::marker::Unpin for aya::maps::perf::PerfEventArray<T> where alloc::sync::Arc<T>: core::marker::Unpin
-impl<T> core::marker::UnsafeUnpin for aya::maps::perf::PerfEventArray<T> where alloc::sync::Arc<T>: core::marker::UnsafeUnpin
-impl<T> core::panic::unwind_safe::RefUnwindSafe for aya::maps::perf::PerfEventArray<T> where alloc::sync::Arc<T>: core::panic::unwind_safe::RefUnwindSafe
-impl<T> core::panic::unwind_safe::UnwindSafe for aya::maps::perf::PerfEventArray<T> where alloc::sync::Arc<T>: core::panic::unwind_safe::UnwindSafe
+impl<T> core::marker::Freeze for aya::maps::perf::PerfEventArray<T>
+impl<T> core::marker::Send for aya::maps::perf::PerfEventArray<T> where T: core::marker::Sync + core::marker::Send
+impl<T> core::marker::Sync for aya::maps::perf::PerfEventArray<T> where T: core::marker::Sync + core::marker::Send
+impl<T> core::marker::Unpin for aya::maps::perf::PerfEventArray<T>
+impl<T> core::marker::UnsafeUnpin for aya::maps::perf::PerfEventArray<T>
+impl<T> core::panic::unwind_safe::RefUnwindSafe for aya::maps::perf::PerfEventArray<T> where T: core::panic::unwind_safe::RefUnwindSafe
+impl<T> core::panic::unwind_safe::UnwindSafe for aya::maps::perf::PerfEventArray<T> where T: core::panic::unwind_safe::RefUnwindSafe
 pub struct aya::maps::ProgramArray<T>
 impl<T: core::borrow::Borrow<aya::maps::MapData>> aya::maps::ProgramArray<T>
 pub fn aya::maps::ProgramArray<T>::indices(&self) -> aya::maps::MapKeys<'_, u32>
@@ -1961,13 +2010,13 @@ pub fn aya::maps::queue::Queue<&'a mut aya::maps::MapData, V>::try_from(&'a mut 
 impl<V: aya::Pod> core::convert::TryFrom<aya::maps::Map> for aya::maps::queue::Queue<aya::maps::MapData, V>
 pub type aya::maps::queue::Queue<aya::maps::MapData, V>::Error = aya::maps::MapError
 pub fn aya::maps::queue::Queue<aya::maps::MapData, V>::try_from(aya::maps::Map) -> core::result::Result<Self, Self::Error>
-impl<T, V> core::marker::Freeze for aya::maps::queue::Queue<T, V> where T: core::marker::Freeze, core::marker::PhantomData<V>: core::marker::Freeze
-impl<T, V> core::marker::Send for aya::maps::queue::Queue<T, V> where T: core::marker::Send, core::marker::PhantomData<V>: core::marker::Send
-impl<T, V> core::marker::Sync for aya::maps::queue::Queue<T, V> where T: core::marker::Sync, core::marker::PhantomData<V>: core::marker::Sync
-impl<T, V> core::marker::Unpin for aya::maps::queue::Queue<T, V> where T: core::marker::Unpin, core::marker::PhantomData<V>: core::marker::Unpin
-impl<T, V> core::marker::UnsafeUnpin for aya::maps::queue::Queue<T, V> where T: core::marker::UnsafeUnpin, core::marker::PhantomData<V>: core::marker::UnsafeUnpin
-impl<T, V> core::panic::unwind_safe::RefUnwindSafe for aya::maps::queue::Queue<T, V> where T: core::panic::unwind_safe::RefUnwindSafe, core::marker::PhantomData<V>: core::panic::unwind_safe::RefUnwindSafe
-impl<T, V> core::panic::unwind_safe::UnwindSafe for aya::maps::queue::Queue<T, V> where T: core::panic::unwind_safe::UnwindSafe, core::marker::PhantomData<V>: core::panic::unwind_safe::UnwindSafe
+impl<T, V> core::marker::Freeze for aya::maps::queue::Queue<T, V> where T: core::marker::Freeze
+impl<T, V> core::marker::Send for aya::maps::queue::Queue<T, V> where T: core::marker::Send, V: core::marker::Send
+impl<T, V> core::marker::Sync for aya::maps::queue::Queue<T, V> where T: core::marker::Sync, V: core::marker::Sync
+impl<T, V> core::marker::Unpin for aya::maps::queue::Queue<T, V> where T: core::marker::Unpin, V: core::marker::Unpin
+impl<T, V> core::marker::UnsafeUnpin for aya::maps::queue::Queue<T, V> where T: core::marker::UnsafeUnpin
+impl<T, V> core::panic::unwind_safe::RefUnwindSafe for aya::maps::queue::Queue<T, V> where T: core::panic::unwind_safe::RefUnwindSafe, V: core::panic::unwind_safe::RefUnwindSafe
+impl<T, V> core::panic::unwind_safe::UnwindSafe for aya::maps::queue::Queue<T, V> where T: core::panic::unwind_safe::UnwindSafe, V: core::panic::unwind_safe::UnwindSafe
 pub struct aya::maps::ReusePortSockArray<T>
 impl<T: core::borrow::Borrow<aya::maps::MapData>> aya::maps::ReusePortSockArray<T>
 pub fn aya::maps::ReusePortSockArray<T>::indices(&self) -> aya::maps::MapKeys<'_, u32>
@@ -2034,13 +2083,13 @@ pub fn aya::maps::sk_storage::SkStorage<T, V>::fmt(&self, &mut core::fmt::Format
 impl<V: aya::Pod> core::convert::TryFrom<aya::maps::Map> for aya::maps::sk_storage::SkStorage<aya::maps::MapData, V>
 pub type aya::maps::sk_storage::SkStorage<aya::maps::MapData, V>::Error = aya::maps::MapError
 pub fn aya::maps::sk_storage::SkStorage<aya::maps::MapData, V>::try_from(aya::maps::Map) -> core::result::Result<Self, Self::Error>
-impl<T, V> core::marker::Freeze for aya::maps::sk_storage::SkStorage<T, V> where T: core::marker::Freeze, core::marker::PhantomData<V>: core::marker::Freeze
-impl<T, V> core::marker::Send for aya::maps::sk_storage::SkStorage<T, V> where T: core::marker::Send, core::marker::PhantomData<V>: core::marker::Send
-impl<T, V> core::marker::Sync for aya::maps::sk_storage::SkStorage<T, V> where T: core::marker::Sync, core::marker::PhantomData<V>: core::marker::Sync
-impl<T, V> core::marker::Unpin for aya::maps::sk_storage::SkStorage<T, V> where T: core::marker::Unpin, core::marker::PhantomData<V>: core::marker::Unpin
-impl<T, V> core::marker::UnsafeUnpin for aya::maps::sk_storage::SkStorage<T, V> where T: core::marker::UnsafeUnpin, core::marker::PhantomData<V>: core::marker::UnsafeUnpin
-impl<T, V> core::panic::unwind_safe::RefUnwindSafe for aya::maps::sk_storage::SkStorage<T, V> where T: core::panic::unwind_safe::RefUnwindSafe, core::marker::PhantomData<V>: core::panic::unwind_safe::RefUnwindSafe
-impl<T, V> core::panic::unwind_safe::UnwindSafe for aya::maps::sk_storage::SkStorage<T, V> where T: core::panic::unwind_safe::UnwindSafe, core::marker::PhantomData<V>: core::panic::unwind_safe::UnwindSafe
+impl<T, V> core::marker::Freeze for aya::maps::sk_storage::SkStorage<T, V> where T: core::marker::Freeze
+impl<T, V> core::marker::Send for aya::maps::sk_storage::SkStorage<T, V> where T: core::marker::Send, V: core::marker::Send
+impl<T, V> core::marker::Sync for aya::maps::sk_storage::SkStorage<T, V> where T: core::marker::Sync, V: core::marker::Sync
+impl<T, V> core::marker::Unpin for aya::maps::sk_storage::SkStorage<T, V> where T: core::marker::Unpin, V: core::marker::Unpin
+impl<T, V> core::marker::UnsafeUnpin for aya::maps::sk_storage::SkStorage<T, V> where T: core::marker::UnsafeUnpin
+impl<T, V> core::panic::unwind_safe::RefUnwindSafe for aya::maps::sk_storage::SkStorage<T, V> where T: core::panic::unwind_safe::RefUnwindSafe, V: core::panic::unwind_safe::RefUnwindSafe
+impl<T, V> core::panic::unwind_safe::UnwindSafe for aya::maps::sk_storage::SkStorage<T, V> where T: core::panic::unwind_safe::UnwindSafe, V: core::panic::unwind_safe::UnwindSafe
 pub struct aya::maps::SockHash<T, K>
 impl<T: core::borrow::Borrow<aya::maps::MapData>, K: aya::Pod> aya::maps::SockHash<T, K>
 pub fn aya::maps::SockHash<T, K>::fd(&self) -> &aya::maps::sock::SockMapFd
@@ -2068,13 +2117,13 @@ pub fn aya::maps::SockHash<T, K>::map(&self) -> &aya::maps::MapData
 impl<V: aya::Pod> core::convert::TryFrom<aya::maps::Map> for aya::maps::SockHash<aya::maps::MapData, V>
 pub type aya::maps::SockHash<aya::maps::MapData, V>::Error = aya::maps::MapError
 pub fn aya::maps::SockHash<aya::maps::MapData, V>::try_from(aya::maps::Map) -> core::result::Result<Self, Self::Error>
-impl<T, K> core::marker::Freeze for aya::maps::SockHash<T, K> where T: core::marker::Freeze, core::marker::PhantomData<K>: core::marker::Freeze
-impl<T, K> core::marker::Send for aya::maps::SockHash<T, K> where T: core::marker::Send, core::marker::PhantomData<K>: core::marker::Send
-impl<T, K> core::marker::Sync for aya::maps::SockHash<T, K> where T: core::marker::Sync, core::marker::PhantomData<K>: core::marker::Sync
-impl<T, K> core::marker::Unpin for aya::maps::SockHash<T, K> where T: core::marker::Unpin, core::marker::PhantomData<K>: core::marker::Unpin
-impl<T, K> core::marker::UnsafeUnpin for aya::maps::SockHash<T, K> where T: core::marker::UnsafeUnpin, core::marker::PhantomData<K>: core::marker::UnsafeUnpin
-impl<T, K> core::panic::unwind_safe::RefUnwindSafe for aya::maps::SockHash<T, K> where T: core::panic::unwind_safe::RefUnwindSafe, core::marker::PhantomData<K>: core::panic::unwind_safe::RefUnwindSafe
-impl<T, K> core::panic::unwind_safe::UnwindSafe for aya::maps::SockHash<T, K> where T: core::panic::unwind_safe::UnwindSafe, core::marker::PhantomData<K>: core::panic::unwind_safe::UnwindSafe
+impl<T, K> core::marker::Freeze for aya::maps::SockHash<T, K> where T: core::marker::Freeze
+impl<T, K> core::marker::Send for aya::maps::SockHash<T, K> where T: core::marker::Send, K: core::marker::Send
+impl<T, K> core::marker::Sync for aya::maps::SockHash<T, K> where T: core::marker::Sync, K: core::marker::Sync
+impl<T, K> core::marker::Unpin for aya::maps::SockHash<T, K> where T: core::marker::Unpin, K: core::marker::Unpin
+impl<T, K> core::marker::UnsafeUnpin for aya::maps::SockHash<T, K> where T: core::marker::UnsafeUnpin
+impl<T, K> core::panic::unwind_safe::RefUnwindSafe for aya::maps::SockHash<T, K> where T: core::panic::unwind_safe::RefUnwindSafe, K: core::panic::unwind_safe::RefUnwindSafe
+impl<T, K> core::panic::unwind_safe::UnwindSafe for aya::maps::SockHash<T, K> where T: core::panic::unwind_safe::UnwindSafe, K: core::panic::unwind_safe::UnwindSafe
 pub struct aya::maps::SockMap<T>
 impl<T: core::borrow::Borrow<aya::maps::MapData>> aya::maps::SockMap<T>
 pub fn aya::maps::SockMap<T>::fd(&self) -> &aya::maps::sock::SockMapFd
@@ -2119,13 +2168,13 @@ pub fn aya::maps::stack::Stack<&'a mut aya::maps::MapData, V>::try_from(&'a mut 
 impl<V: aya::Pod> core::convert::TryFrom<aya::maps::Map> for aya::maps::stack::Stack<aya::maps::MapData, V>
 pub type aya::maps::stack::Stack<aya::maps::MapData, V>::Error = aya::maps::MapError
 pub fn aya::maps::stack::Stack<aya::maps::MapData, V>::try_from(aya::maps::Map) -> core::result::Result<Self, Self::Error>
-impl<T, V> core::marker::Freeze for aya::maps::stack::Stack<T, V> where T: core::marker::Freeze, core::marker::PhantomData<V>: core::marker::Freeze
-impl<T, V> core::marker::Send for aya::maps::stack::Stack<T, V> where T: core::marker::Send, core::marker::PhantomData<V>: core::marker::Send
-impl<T, V> core::marker::Sync for aya::maps::stack::Stack<T, V> where T: core::marker::Sync, core::marker::PhantomData<V>: core::marker::Sync
-impl<T, V> core::marker::Unpin for aya::maps::stack::Stack<T, V> where T: core::marker::Unpin, core::marker::PhantomData<V>: core::marker::Unpin
-impl<T, V> core::marker::UnsafeUnpin for aya::maps::stack::Stack<T, V> where T: core::marker::UnsafeUnpin, core::marker::PhantomData<V>: core::marker::UnsafeUnpin
-impl<T, V> core::panic::unwind_safe::RefUnwindSafe for aya::maps::stack::Stack<T, V> where T: core::panic::unwind_safe::RefUnwindSafe, core::marker::PhantomData<V>: core::panic::unwind_safe::RefUnwindSafe
-impl<T, V> core::panic::unwind_safe::UnwindSafe for aya::maps::stack::Stack<T, V> where T: core::panic::unwind_safe::UnwindSafe, core::marker::PhantomData<V>: core::panic::unwind_safe::UnwindSafe
+impl<T, V> core::marker::Freeze for aya::maps::stack::Stack<T, V> where T: core::marker::Freeze
+impl<T, V> core::marker::Send for aya::maps::stack::Stack<T, V> where T: core::marker::Send, V: core::marker::Send
+impl<T, V> core::marker::Sync for aya::maps::stack::Stack<T, V> where T: core::marker::Sync, V: core::marker::Sync
+impl<T, V> core::marker::Unpin for aya::maps::stack::Stack<T, V> where T: core::marker::Unpin, V: core::marker::Unpin
+impl<T, V> core::marker::UnsafeUnpin for aya::maps::stack::Stack<T, V> where T: core::marker::UnsafeUnpin
+impl<T, V> core::panic::unwind_safe::RefUnwindSafe for aya::maps::stack::Stack<T, V> where T: core::panic::unwind_safe::RefUnwindSafe, V: core::panic::unwind_safe::RefUnwindSafe
+impl<T, V> core::panic::unwind_safe::UnwindSafe for aya::maps::stack::Stack<T, V> where T: core::panic::unwind_safe::UnwindSafe, V: core::panic::unwind_safe::UnwindSafe
 pub struct aya::maps::StackTraceMap<T>
 impl<T: core::borrow::Borrow<aya::maps::MapData>> aya::maps::stack_trace::StackTraceMap<T>
 pub fn aya::maps::stack_trace::StackTraceMap<T>::get(&self, &u32, u64) -> core::result::Result<aya::maps::stack_trace::StackTrace, aya::maps::MapError>
@@ -3393,7 +3442,7 @@ impl aya::programs::links::FdLink
 pub fn aya::programs::links::FdLink::info(&self) -> core::result::Result<aya::programs::links::LinkInfo, aya::programs::links::LinkError>
 pub fn aya::programs::links::FdLink::pin<P: core::convert::AsRef<std::path::Path>>(self, P) -> core::result::Result<aya::programs::links::PinnedLink, aya::pin::PinError>
 impl aya::programs::links::Link for aya::programs::links::FdLink
-pub type aya::programs::links::FdLink::Error = never
+pub type aya::programs::links::FdLink::Error = core::convert::Infallible
 pub type aya::programs::links::FdLink::Id = aya::programs::links::FdLinkId
 pub fn aya::programs::links::FdLink::detach(self) -> core::result::Result<(), Self::Error>
 pub fn aya::programs::links::FdLink::id(&self) -> Self::Id
@@ -3690,7 +3739,7 @@ pub type aya::programs::kprobe::KProbeLink::Id = aya::programs::kprobe::KProbeLi
 pub fn aya::programs::kprobe::KProbeLink::detach(self) -> core::result::Result<(), Self::Error>
 pub fn aya::programs::kprobe::KProbeLink::id(&self) -> Self::Id
 impl aya::programs::links::Link for aya::programs::links::FdLink
-pub type aya::programs::links::FdLink::Error = never
+pub type aya::programs::links::FdLink::Error = core::convert::Infallible
 pub type aya::programs::links::FdLink::Id = aya::programs::links::FdLinkId
 pub fn aya::programs::links::FdLink::detach(self) -> core::result::Result<(), Self::Error>
 pub fn aya::programs::links::FdLink::id(&self) -> Self::Id
@@ -5243,6 +5292,7 @@ pub struct aya::programs::trace_point::TracePoint
 impl aya::programs::trace_point::TracePoint
 pub const aya::programs::trace_point::TracePoint::PROGRAM_TYPE: aya::programs::ProgramType
 pub fn aya::programs::trace_point::TracePoint::attach(&mut self, &str, &str) -> core::result::Result<aya::programs::trace_point::TracePointLinkId, aya::programs::ProgramError>
+pub fn aya::programs::trace_point::TracePoint::attach_to_perf_event(&mut self, std::os::fd::owned::OwnedFd) -> core::result::Result<aya::programs::trace_point::TracePointLink, aya::programs::ProgramError>
 pub fn aya::programs::trace_point::TracePoint::load(&mut self) -> core::result::Result<(), aya::programs::ProgramError>
 impl aya::programs::trace_point::TracePoint
 pub fn aya::programs::trace_point::TracePoint::detach(&mut self, aya::programs::trace_point::TracePointLinkId) -> core::result::Result<(), aya::programs::ProgramError>
@@ -6017,6 +6067,7 @@ pub aya::programs::ProgramError::SkReuseportError(aya::programs::sk_reuseport::S
 pub aya::programs::ProgramError::SocketFilterError(aya::programs::socket_filter::SocketFilterError)
 pub aya::programs::ProgramError::SyscallError(aya::sys::SyscallError)
 pub aya::programs::ProgramError::TcError(aya::programs::tc::TcError)
+pub aya::programs::ProgramError::TokenLoadingFinalized
 pub aya::programs::ProgramError::TracePointError(aya::programs::trace_point::TracePointError)
 pub aya::programs::ProgramError::UProbeError(aya::programs::uprobe::UProbeError)
 pub aya::programs::ProgramError::UnexpectedProgramType
@@ -6051,10 +6102,10 @@ impl core::convert::From<aya::sys::SyscallError> for aya::programs::ProgramError
 pub fn aya::programs::ProgramError::from(aya::sys::SyscallError) -> Self
 impl core::convert::From<aya_obj::btf::btf::BtfError> for aya::programs::ProgramError
 pub fn aya::programs::ProgramError::from(aya_obj::btf::btf::BtfError) -> Self
+impl core::convert::From<core::convert::Infallible> for aya::programs::ProgramError
+pub fn aya::programs::ProgramError::from(core::convert::Infallible) -> Self
 impl core::convert::From<core::io::error::Error> for aya::programs::ProgramError
 pub fn aya::programs::ProgramError::from(core::io::error::Error) -> Self
-impl core::convert::From<never> for aya::programs::ProgramError
-pub fn aya::programs::ProgramError::from(core::convert::Infallible) -> Self
 impl core::error::Error for aya::programs::ProgramError
 pub fn aya::programs::ProgramError::source(&self) -> core::option::Option<&(dyn core::error::Error + 'static)>
 impl core::fmt::Debug for aya::programs::ProgramError
@@ -7491,6 +7542,7 @@ pub struct aya::programs::TracePoint
 impl aya::programs::trace_point::TracePoint
 pub const aya::programs::trace_point::TracePoint::PROGRAM_TYPE: aya::programs::ProgramType
 pub fn aya::programs::trace_point::TracePoint::attach(&mut self, &str, &str) -> core::result::Result<aya::programs::trace_point::TracePointLinkId, aya::programs::ProgramError>
+pub fn aya::programs::trace_point::TracePoint::attach_to_perf_event(&mut self, std::os::fd::owned::OwnedFd) -> core::result::Result<aya::programs::trace_point::TracePointLink, aya::programs::ProgramError>
 pub fn aya::programs::trace_point::TracePoint::load(&mut self) -> core::result::Result<(), aya::programs::ProgramError>
 impl aya::programs::trace_point::TracePoint
 pub fn aya::programs::trace_point::TracePoint::detach(&mut self, aya::programs::trace_point::TracePointLinkId) -> core::result::Result<(), aya::programs::ProgramError>
@@ -7672,7 +7724,7 @@ pub type aya::programs::kprobe::KProbeLink::Id = aya::programs::kprobe::KProbeLi
 pub fn aya::programs::kprobe::KProbeLink::detach(self) -> core::result::Result<(), Self::Error>
 pub fn aya::programs::kprobe::KProbeLink::id(&self) -> Self::Id
 impl aya::programs::links::Link for aya::programs::links::FdLink
-pub type aya::programs::links::FdLink::Error = never
+pub type aya::programs::links::FdLink::Error = core::convert::Infallible
 pub type aya::programs::links::FdLink::Id = aya::programs::links::FdLinkId
 pub fn aya::programs::links::FdLink::detach(self) -> core::result::Result<(), Self::Error>
 pub fn aya::programs::links::FdLink::id(&self) -> Self::Id
@@ -7863,6 +7915,7 @@ impl core::marker::Unpin for aya::sys::SyscallError
 impl core::marker::UnsafeUnpin for aya::sys::SyscallError
 impl !core::panic::unwind_safe::RefUnwindSafe for aya::sys::SyscallError
 impl !core::panic::unwind_safe::UnwindSafe for aya::sys::SyscallError
+pub fn aya::sys::detect_features_with_token(std::os::fd::owned::BorrowedFd<'_>) -> aya::features::Features
 pub fn aya::sys::enable_stats(aya::sys::Stats) -> core::result::Result<std::os::fd::owned::OwnedFd, aya::sys::SyscallError>
 pub fn aya::sys::is_bpf_global_data_supported() -> core::io::error::Result<bool>
 pub fn aya::sys::is_bpf_name_supported() -> core::io::error::Result<bool>
@@ -7949,6 +8002,88 @@ impl core::marker::UnsafeUnpin for aya::test_helpers::NetNsGuard
 impl core::panic::unwind_safe::RefUnwindSafe for aya::test_helpers::NetNsGuard
 impl core::panic::unwind_safe::UnwindSafe for aya::test_helpers::NetNsGuard
 pub type aya::test_helpers::AyaTestResult<T> = core::result::Result<T, aya::test_helpers::AyaTestError>
+pub mod aya::token
+pub struct aya::token::BpfFilesystem
+impl aya::token::BpfFilesystem
+pub fn aya::token::BpfFilesystem::as_fd(&self) -> std::os::fd::owned::BorrowedFd<'_>
+pub fn aya::token::BpfFilesystem::from_owned_fd(std::os::fd::owned::OwnedFd) -> core::result::Result<Self, core::io::error::Error>
+impl core::marker::Freeze for aya::token::BpfFilesystem
+impl core::marker::Send for aya::token::BpfFilesystem
+impl core::marker::Sync for aya::token::BpfFilesystem
+impl core::marker::Unpin for aya::token::BpfFilesystem
+impl core::marker::UnsafeUnpin for aya::token::BpfFilesystem
+impl core::panic::unwind_safe::RefUnwindSafe for aya::token::BpfFilesystem
+impl core::panic::unwind_safe::UnwindSafe for aya::token::BpfFilesystem
+pub struct aya::token::BpfFilesystemContext
+impl aya::token::BpfFilesystemContext
+pub fn aya::token::BpfFilesystemContext::as_fd(&self) -> std::os::fd::owned::BorrowedFd<'_>
+pub fn aya::token::BpfFilesystemContext::create() -> core::result::Result<Self, core::io::error::Error>
+pub fn aya::token::BpfFilesystemContext::from_owned_fd(std::os::fd::owned::OwnedFd) -> core::result::Result<Self, core::io::error::Error>
+pub fn aya::token::BpfFilesystemContext::materialize(self, aya::token::FilesystemPermissions) -> core::result::Result<aya::token::BpfFilesystemMount, core::io::error::Error>
+impl core::marker::Freeze for aya::token::BpfFilesystemContext
+impl core::marker::Send for aya::token::BpfFilesystemContext
+impl core::marker::Sync for aya::token::BpfFilesystemContext
+impl core::marker::Unpin for aya::token::BpfFilesystemContext
+impl core::marker::UnsafeUnpin for aya::token::BpfFilesystemContext
+impl core::panic::unwind_safe::RefUnwindSafe for aya::token::BpfFilesystemContext
+impl core::panic::unwind_safe::UnwindSafe for aya::token::BpfFilesystemContext
+pub struct aya::token::BpfFilesystemMount
+impl aya::token::BpfFilesystemMount
+pub fn aya::token::BpfFilesystemMount::as_fd(&self) -> std::os::fd::owned::BorrowedFd<'_>
+pub fn aya::token::BpfFilesystemMount::from_owned_fd(std::os::fd::owned::OwnedFd) -> core::result::Result<Self, core::io::error::Error>
+pub fn aya::token::BpfFilesystemMount::open(&self) -> core::result::Result<aya::token::BpfFilesystem, core::io::error::Error>
+impl core::marker::Freeze for aya::token::BpfFilesystemMount
+impl core::marker::Send for aya::token::BpfFilesystemMount
+impl core::marker::Sync for aya::token::BpfFilesystemMount
+impl core::marker::Unpin for aya::token::BpfFilesystemMount
+impl core::marker::UnsafeUnpin for aya::token::BpfFilesystemMount
+impl core::panic::unwind_safe::RefUnwindSafe for aya::token::BpfFilesystemMount
+impl core::panic::unwind_safe::UnwindSafe for aya::token::BpfFilesystemMount
+pub struct aya::token::BpfToken
+impl aya::token::BpfToken
+pub fn aya::token::BpfToken::as_fd(&self) -> std::os::fd::owned::BorrowedFd<'_>
+pub fn aya::token::BpfToken::create<P: core::convert::AsRef<std::path::Path>>(P) -> core::result::Result<Self, core::io::error::Error>
+pub fn aya::token::BpfToken::create_from_bpffs(&aya::token::BpfFilesystem) -> core::result::Result<Self, core::io::error::Error>
+pub fn aya::token::BpfToken::from_owned_fd(std::os::fd::owned::OwnedFd) -> core::result::Result<Self, core::io::error::Error>
+impl core::marker::Freeze for aya::token::BpfToken
+impl core::marker::Send for aya::token::BpfToken
+impl core::marker::Sync for aya::token::BpfToken
+impl core::marker::Unpin for aya::token::BpfToken
+impl core::marker::UnsafeUnpin for aya::token::BpfToken
+impl core::panic::unwind_safe::RefUnwindSafe for aya::token::BpfToken
+impl core::panic::unwind_safe::UnwindSafe for aya::token::BpfToken
+pub struct aya::token::FilesystemPermissions
+impl core::default::Default for aya::token::FilesystemPermissions
+pub fn aya::token::FilesystemPermissions::default() -> aya::token::FilesystemPermissions
+impl core::fmt::Debug for aya::token::FilesystemPermissions
+pub fn aya::token::FilesystemPermissions::fmt(&self, &mut core::fmt::Formatter<'_>) -> core::fmt::Result
+impl core::marker::Freeze for aya::token::FilesystemPermissions
+impl core::marker::Send for aya::token::FilesystemPermissions
+impl core::marker::Sync for aya::token::FilesystemPermissions
+impl core::marker::Unpin for aya::token::FilesystemPermissions
+impl core::marker::UnsafeUnpin for aya::token::FilesystemPermissions
+impl core::panic::unwind_safe::RefUnwindSafe for aya::token::FilesystemPermissions
+impl core::panic::unwind_safe::UnwindSafe for aya::token::FilesystemPermissions
+pub struct aya::token::FilesystemPermissionsBuilder
+impl aya::token::FilesystemPermissionsBuilder
+pub fn aya::token::FilesystemPermissionsBuilder::allow_attach_type(self, aya_obj::attach::BpfAttachType) -> Self
+pub fn aya::token::FilesystemPermissionsBuilder::allow_cmd(self, aya_obj::cmd::BpfCommand) -> Self
+pub fn aya::token::FilesystemPermissionsBuilder::allow_map_type(self, aya_obj::maps::BpfMapType) -> Self
+pub fn aya::token::FilesystemPermissionsBuilder::allow_prog_type(self, aya_obj::programs::BpfProgType) -> Self
+pub const fn aya::token::FilesystemPermissionsBuilder::build(self) -> aya::token::FilesystemPermissions
+pub const fn aya::token::FilesystemPermissionsBuilder::gid(self, u32) -> Self
+pub const fn aya::token::FilesystemPermissionsBuilder::uid(self, u32) -> Self
+impl core::default::Default for aya::token::FilesystemPermissionsBuilder
+pub fn aya::token::FilesystemPermissionsBuilder::default() -> aya::token::FilesystemPermissionsBuilder
+impl core::fmt::Debug for aya::token::FilesystemPermissionsBuilder
+pub fn aya::token::FilesystemPermissionsBuilder::fmt(&self, &mut core::fmt::Formatter<'_>) -> core::fmt::Result
+impl core::marker::Freeze for aya::token::FilesystemPermissionsBuilder
+impl core::marker::Send for aya::token::FilesystemPermissionsBuilder
+impl core::marker::Sync for aya::token::FilesystemPermissionsBuilder
+impl core::marker::Unpin for aya::token::FilesystemPermissionsBuilder
+impl core::marker::UnsafeUnpin for aya::token::FilesystemPermissionsBuilder
+impl core::panic::unwind_safe::RefUnwindSafe for aya::token::FilesystemPermissionsBuilder
+impl core::panic::unwind_safe::UnwindSafe for aya::token::FilesystemPermissionsBuilder
 pub mod aya::util
 pub struct aya::util::KernelVersion
 impl aya::util::KernelVersion
@@ -7993,8 +8128,19 @@ pub aya::EbpfError::NoBTF
 pub aya::EbpfError::ParseError(aya_obj::obj::ParseError)
 pub aya::EbpfError::ProgramError(aya::programs::ProgramError)
 pub aya::EbpfError::RelocationError(aya_obj::relocation::EbpfRelocationError)
+pub aya::EbpfError::SelectedProgramNotFound
+pub aya::EbpfError::SelectedProgramNotFound::name: alloc::string::String
+pub aya::EbpfError::SelectedProgramNotLoaded
+pub aya::EbpfError::SelectedProgramNotLoaded::name: alloc::string::String
+pub aya::EbpfError::TokenFdClone
+pub aya::EbpfError::TokenFdClone::error: core::io::error::Error
+pub aya::EbpfError::TokenFeatureSelectionConflict
+pub aya::EbpfError::TokenLoadingAlreadyFinalized
+pub aya::EbpfError::TokenLoadingUnavailable
 pub aya::EbpfError::UnexpectedPinningType
 pub aya::EbpfError::UnexpectedPinningType::name: u32
+pub aya::EbpfError::UnselectedProgramLoaded
+pub aya::EbpfError::UnselectedProgramLoaded::name: alloc::string::String
 impl core::convert::From<aya::maps::MapError> for aya::EbpfError
 pub fn aya::EbpfError::from(aya::maps::MapError) -> Self
 impl core::convert::From<aya::programs::ProgramError> for aya::EbpfError
@@ -8024,6 +8170,7 @@ impl !core::panic::unwind_safe::RefUnwindSafe for aya::EbpfError
 impl !core::panic::unwind_safe::UnwindSafe for aya::EbpfError
 pub struct aya::Ebpf
 impl aya::Ebpf
+pub fn aya::Ebpf::finalize_token_loading<I, S>(&mut self, I) -> core::result::Result<(), aya::EbpfError> where I: core::iter::traits::collect::IntoIterator<Item = S>, S: core::convert::AsRef<str>
 pub fn aya::Ebpf::load(&[u8]) -> core::result::Result<Self, aya::EbpfError>
 pub fn aya::Ebpf::load_file<P: core::convert::AsRef<std::path::Path>>(P) -> core::result::Result<Self, aya::EbpfError>
 pub fn aya::Ebpf::map(&self, &str) -> core::option::Option<&aya::maps::Map>
@@ -8060,6 +8207,8 @@ pub fn aya::EbpfLoader<'a>::new() -> Self
 pub fn aya::EbpfLoader<'a>::override_global<T: core::convert::Into<aya::GlobalData<'a>>>(&mut self, &'a str, T, bool) -> &mut Self
 pub fn aya::EbpfLoader<'a>::set_global<T: core::convert::Into<aya::GlobalData<'a>>>(&mut self, &'a str, T, bool) -> &mut Self
 pub fn aya::EbpfLoader<'a>::set_max_entries(&mut self, &'a str, u32) -> &mut Self
+pub fn aya::EbpfLoader<'a>::token(&mut self, &aya::token::BpfToken) -> core::result::Result<&mut Self, aya::EbpfError>
+pub fn aya::EbpfLoader<'a>::token_with_features(&mut self, &aya::token::BpfToken, aya::features::Features) -> core::result::Result<&mut Self, aya::EbpfError>
 pub const fn aya::EbpfLoader<'a>::verifier_log_level(&mut self, aya::VerifierLogLevel) -> &mut Self
 impl core::default::Default for aya::EbpfLoader<'_>
 pub fn aya::EbpfLoader<'_>::default() -> Self
@@ -8305,6 +8454,7 @@ impl aya::programs::TestRun for aya::programs::xdp::Xdp
 pub type aya::programs::xdp::Xdp::Opts<'a> = aya::programs::TestRunOptions<'a>
 pub type aya::programs::xdp::Xdp::Result = aya::programs::TestRunResult
 pub fn aya::programs::xdp::Xdp::test_run(&self, Self::Opts) -> core::result::Result<Self::Result, aya::programs::ProgramError>
+pub fn aya::features() -> &'static aya::features::Features
 pub type aya::Bpf = aya::Ebpf
 pub type aya::BpfError = aya::EbpfError
 pub type aya::BpfLoader<'a> = aya::EbpfLoader<'a>
