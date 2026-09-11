@@ -162,14 +162,7 @@ pub fn is_btf_feature_supported(feature: BtfFeature) -> io::Result<bool> {
     is_btf_feature_supported_inner_result(feature, None)
 }
 
-pub(crate) fn is_btf_feature_supported_inner(
-    feature: BtfFeature,
-    token_fd: Option<std::os::fd::BorrowedFd<'_>>,
-) -> bool {
-    is_btf_feature_supported_inner_result(feature, token_fd).unwrap_or(false)
-}
-
-fn is_btf_feature_supported_inner_result(
+pub(crate) fn is_btf_feature_supported_inner_result(
     feature: BtfFeature,
     token_fd: Option<std::os::fd::BorrowedFd<'_>>,
 ) -> io::Result<bool> {

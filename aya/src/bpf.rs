@@ -335,17 +335,18 @@ impl<'a> EbpfLoader<'a> {
         Ok(self)
     }
 
-    fn selected_features(&self) -> (Features, Option<Arc<crate::MockableFd>>) {
+    fn selected_features(&self) -> Result<(Features, Option<Arc<crate::MockableFd>>), EbpfError> {
         match &self.feature_selection {
-            FeatureSelection::Default => (Features::ambient_cached(), None),
+            FeatureSelection::Default => Ok((Features::ambient_cached(), None)),
             FeatureSelection::TokenDetect(token) => {
                 use crate::sys::detect_features_with_token;
-                let features = detect_features_with_token(token.as_fd());
+                let features = detect_features_with_token(token.as_fd())
+                    .map_err(|error| EbpfError::TokenFeatureProbe { error })?;
                 debug!("BPF Feature Detection (with token): {features:#?}");
-                (features, Some(Arc::clone(token)))
+                Ok((features, Some(Arc::clone(token))))
             }
             FeatureSelection::TokenProvided(token, features) => {
-                (features.clone(), Some(Arc::clone(token)))
+                Ok((features.clone(), Some(Arc::clone(token))))
             }
         }
     }
@@ -550,7 +551,7 @@ impl<'a> EbpfLoader<'a> {
     /// # Ok::<(), aya::EbpfError>(())
     /// ```
     pub fn load(&mut self, data: &[u8]) -> Result<Ebpf, EbpfError> {
-        let (features, token) = self.selected_features();
+        let (features, token) = self.selected_features()?;
         let token_loading = if token.is_some() {
             TokenLoadingState::Active
         } else {
@@ -1545,6 +1546,16 @@ pub enum EbpfError {
     /// Token feature selection was configured more than once.
     #[error("BPF token feature selection is already configured")]
     TokenFeatureSelectionConflict,
+
+    /// Probing kernel features through the BPF token failed for a reason other than the kernel
+    /// lacking the probed feature, such as the token not delegating the probe's own program or
+    /// map type.
+    #[error("failed to detect kernel features using the BPF token")]
+    TokenFeatureProbe {
+        #[source]
+        /// The original [`io::Error`].
+        error: io::Error,
+    },
 
     /// Token loading is unavailable because the object was loaded without a token.
     #[error("the eBPF object was loaded without a BPF token")]

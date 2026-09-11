@@ -1503,10 +1503,10 @@ pub(crate) fn probe_btf_type_tag(token_fd: Option<BorrowedFd<'_>>) -> io::Result
 }
 
 /// Detects BPF and BTF features, optionally delegating privilege through a BPF token.
-fn detect_features(token_fd: Option<BorrowedFd<'_>>) -> crate::features::Features {
+fn detect_features(token_fd: Option<BorrowedFd<'_>>) -> io::Result<crate::features::Features> {
     match token_fd {
         Some(token_fd) => crate::features::Features::detect_with_token(token_fd),
-        None => crate::features::Features::ambient_cached(),
+        None => Ok(crate::features::Features::ambient_cached()),
     }
 }
 
@@ -1514,8 +1514,17 @@ fn detect_features(token_fd: Option<BorrowedFd<'_>>) -> crate::features::Feature
 ///
 /// Unlike the process-ambient feature set, this performs a fresh probe using the token for
 /// privilege delegation and does not share the process-wide cache.
+///
+/// # Errors
+///
+/// Returns an I/O error when a probe fails for a reason other than the kernel lacking the
+/// feature being probed, such as the token not delegating the probe's own program or map type.
+/// Callers must not treat such an error as "feature unsupported": doing so can silently disable
+/// a feature the kernel and token both actually support.
 #[cfg(target_os = "linux")]
-pub fn detect_features_with_token(token_fd: BorrowedFd<'_>) -> crate::features::Features {
+pub fn detect_features_with_token(
+    token_fd: BorrowedFd<'_>,
+) -> io::Result<crate::features::Features> {
     detect_features(Some(token_fd))
 }
 
@@ -1970,6 +1979,61 @@ mod tests {
         });
         let error = probe_perf_link(None).unwrap_err();
         assert_eq!(error.raw_os_error(), Some(EIO));
+    }
+
+    #[test]
+    fn probe_bpf_global_data_map_create_carries_token() {
+        override_syscall(|call| match call {
+            Syscall::Ebpf {
+                cmd: bpf_cmd::BPF_MAP_CREATE,
+                attr,
+            } => {
+                let u = unsafe { attr.__bindgen_anon_1 };
+                assert_eq!(u.map_token_fd, TOKEN_FD);
+                assert_eq!(u.map_flags & BPF_F_TOKEN_FD, BPF_F_TOKEN_FD);
+                Ok(crate::MockableFd::mock_signed_fd().into())
+            }
+            Syscall::Ebpf {
+                cmd: bpf_cmd::BPF_PROG_LOAD,
+                attr,
+            } => {
+                let u = unsafe { attr.__bindgen_anon_3 };
+                assert_eq!(u.prog_token_fd, TOKEN_FD);
+                assert_eq!(u.prog_flags & BPF_F_TOKEN_FD, BPF_F_TOKEN_FD);
+                Ok(crate::MockableFd::mock_signed_fd().into())
+            }
+            unexpected => panic!("unexpected syscall: {unexpected:?}"),
+        });
+
+        // SAFETY: TOKEN_FD is used only as an opaque integer by the mocked syscall.
+        let token_fd = unsafe { BorrowedFd::borrow_raw(TOKEN_FD) };
+        let supported = probe_bpf_global_data(Some(token_fd)).unwrap();
+        assert!(supported);
+    }
+
+    #[test]
+    fn probe_bpf_global_data_permission_error_is_not_unsupported() {
+        override_syscall(|call| match call {
+            Syscall::Ebpf {
+                cmd: bpf_cmd::BPF_MAP_CREATE,
+                ..
+            } => Ok(crate::MockableFd::mock_signed_fd().into()),
+            Syscall::Ebpf {
+                cmd: bpf_cmd::BPF_PROG_LOAD,
+                ..
+            } => {
+                // A token that does not delegate `BPF_PROG_TYPE_SOCKET_FILTER` rejects the
+                // probe's own program load with a permission error, distinct from the
+                // EINVAL/E2BIG the kernel returns when it genuinely lacks global-data support.
+                Err((-1, io::Error::from_raw_os_error(EPERM)))
+            }
+            unexpected => panic!("unexpected syscall: {unexpected:?}"),
+        });
+
+        // SAFETY: TOKEN_FD is used only as an opaque integer by the mocked syscall.
+        let token_fd = unsafe { BorrowedFd::borrow_raw(TOKEN_FD) };
+        let error = probe_bpf_global_data(Some(token_fd)).unwrap_err();
+        assert_eq!(error.raw_os_error(), Some(EPERM));
     }
 
     #[test]

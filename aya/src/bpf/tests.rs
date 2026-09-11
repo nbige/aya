@@ -29,7 +29,7 @@ fn caller_features_avoid_token_feature_probe_syscalls() {
     loader.token_with_features(&token, supplied).unwrap();
     override_syscall(|call| panic!("unexpected feature-probe syscall: {call:?}"));
 
-    let (features, token_fd) = loader.selected_features();
+    let (features, token_fd) = loader.selected_features().unwrap();
 
     assert!(features.bpf_name());
     assert!(token_fd.is_some());
