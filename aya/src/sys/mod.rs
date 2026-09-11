@@ -26,12 +26,6 @@ pub use feature_probe::{
     is_devmap_prog_id_supported, is_helper_supported, is_map_supported, is_perf_link_supported,
     is_program_supported,
 };
-pub(crate) use feature_probe::{
-    is_bpf_global_data_supported_inner, is_bpf_name_supported_inner,
-    is_btf_feature_supported_inner_result, is_btf_supported_inner,
-    is_cpumap_prog_id_supported_inner, is_devmap_prog_id_supported_inner,
-    is_helper_supported_inner, is_perf_link_supported_inner,
-};
 pub use netlink::NetlinkError;
 #[doc(hidden)]
 pub use netlink::netlink_set_link_up;
