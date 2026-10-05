@@ -373,22 +373,13 @@ impl Btf {
 
     /// Returns the string at an offset in this BTF's string section.
     pub fn string_at(&self, offset: u32) -> Result<Cow<'_, str>, BtfError> {
-        let btf_header {
-            hdr_len,
-            mut str_off,
-            str_len,
-            ..
-        } = self.header;
-        str_off += hdr_len;
-        if offset >= str_off + str_len {
-            return Err(BtfError::InvalidStringOffset {
-                offset: offset as usize,
-            });
-        }
-
         let offset = offset as usize;
+        let bytes = self
+            .strings
+            .get(offset..)
+            .ok_or(BtfError::InvalidStringOffset { offset })?;
 
-        let s = CStr::from_bytes_until_nul(&self.strings[offset..])
+        let s = CStr::from_bytes_until_nul(bytes)
             .map_err(|FromBytesUntilNulError { .. }| BtfError::InvalidStringOffset { offset })?;
 
         Ok(s.to_string_lossy())
@@ -1319,6 +1310,45 @@ mod tests {
 
     use super::*;
     use crate::btf::{BtfParam, DeclTag, Float, Func, FuncProto, Ptr, TypeTag};
+
+    #[test]
+    fn string_at_checks_string_section_bounds() {
+        let mut btf = Btf::new();
+        let name = btf.add_string("valid");
+        let btf = Btf::parse(&btf.to_bytes(), Endianness::default()).unwrap();
+        assert_eq!(btf.string_at(name).unwrap(), "valid");
+        assert_eq!(btf.string_at(0).unwrap(), "");
+        let end = btf.strings.len() as u32;
+        for offset in [end, end + 1, u32::MAX] {
+            assert_matches!(btf.string_at(offset), Err(BtfError::InvalidStringOffset { offset: actual }) => {
+                assert_eq!(actual, offset as usize);
+            });
+        }
+    }
+
+    #[test]
+    fn string_at_rejects_unterminated_string() {
+        let mut btf = Btf::new();
+        let name = btf.add_string("valid");
+        let mut bytes = btf.to_bytes();
+        *bytes.last_mut().unwrap() = b'x';
+        let btf = Btf::parse(&bytes, Endianness::default()).unwrap();
+        assert_matches!(btf.string_at(name), Err(BtfError::InvalidStringOffset { offset }) => {
+            assert_eq!(offset, name as usize);
+        });
+    }
+
+    #[test]
+    fn type_name_propagates_invalid_string_offset() {
+        let mut btf = Btf::new();
+        btf.add_string("valid");
+        let offset = btf.strings.len() as u32 + 1;
+        let id = btf.add_type(BtfType::Int(Int::new(offset, 4, IntEncoding::Signed, 0)));
+        let btf = Btf::parse(&btf.to_bytes(), Endianness::default()).unwrap();
+        assert_matches!(btf.type_name(btf.type_by_id(id).unwrap()), Err(BtfError::InvalidStringOffset { offset: actual }) => {
+            assert_eq!(actual, offset as usize);
+        });
+    }
 
     #[test]
     fn read_only_lookup_preserves_ids_duplicates_and_qualifiers() {
