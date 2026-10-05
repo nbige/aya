@@ -278,7 +278,8 @@ impl Btf {
         self.types.types.len() < 2
     }
 
-    pub(crate) fn types(&self) -> impl Iterator<Item = &BtfType> {
+    /// Returns types in type ID order, including the void type at ID zero.
+    pub fn types(&self) -> impl Iterator<Item = &BtfType> {
         self.types.types.iter()
     }
 
@@ -370,7 +371,8 @@ impl Btf {
         Ok(types)
     }
 
-    pub(crate) fn string_at(&self, offset: u32) -> Result<Cow<'_, str>, BtfError> {
+    /// Returns the string at an offset in this BTF's string section.
+    pub fn string_at(&self, offset: u32) -> Result<Cow<'_, str>, BtfError> {
         let btf_header {
             hdr_len,
             mut str_off,
@@ -392,15 +394,18 @@ impl Btf {
         Ok(s.to_string_lossy())
     }
 
-    pub(crate) fn type_by_id(&self, type_id: u32) -> Result<&BtfType, BtfError> {
+    /// Returns the type with the given ID.
+    pub fn type_by_id(&self, type_id: u32) -> Result<&BtfType, BtfError> {
         self.types.type_by_id(type_id)
     }
 
-    pub(crate) fn resolve_type(&self, root_type_id: u32) -> Result<u32, BtfError> {
+    /// Resolves typedefs and qualifiers, failing when the resolution depth is exceeded.
+    pub fn resolve_type(&self, root_type_id: u32) -> Result<u32, BtfError> {
         self.types.resolve_type(root_type_id)
     }
 
-    pub(crate) fn type_name(&self, ty: &BtfType) -> Result<Cow<'_, str>, BtfError> {
+    /// Returns a type's name using this BTF's string section.
+    pub fn type_name(&self, ty: &BtfType) -> Result<Cow<'_, str>, BtfError> {
         self.string_at(ty.name_offset())
     }
 
@@ -424,7 +429,10 @@ impl Btf {
         })
     }
 
-    pub(crate) fn type_size(&self, root_type_id: u32) -> Result<usize, BtfError> {
+    /// Returns the resolved size in bytes, including array elements.
+    ///
+    /// Pointer sizes use the native pointer width of the host running this code.
+    pub fn type_size(&self, root_type_id: u32) -> Result<usize, BtfError> {
         let mut type_id = root_type_id;
         let mut n_elems = 1;
         for () in core::iter::repeat_n((), MAX_RESOLVE_DEPTH) {
@@ -1311,6 +1319,71 @@ mod tests {
 
     use super::*;
     use crate::btf::{BtfParam, DeclTag, Float, Func, FuncProto, Ptr, TypeTag};
+
+    #[test]
+    fn read_only_lookup_preserves_ids_duplicates_and_qualifiers() {
+        let mut btf = Btf::new();
+        let name = btf.add_string("same");
+        let first = btf.add_type(BtfType::Int(Int::new(name, 4, IntEncoding::Signed, 0)));
+        let second = btf.add_type(BtfType::Int(Int::new(name, 8, IntEncoding::None, 0)));
+        let qualified = btf.add_type(BtfType::Const(Const::new(first)));
+        let alias = btf.add_type(BtfType::Typedef(Typedef::new(name, qualified)));
+        let tagged = btf.add_type(BtfType::TypeTag(TypeTag::new(name, alias)));
+        let cycle_id = tagged + 1;
+        btf.add_type(BtfType::Const(Const::new(cycle_id)));
+        let parsed = Btf::parse(&btf.to_bytes(), Endianness::default()).unwrap();
+        let duplicates: Vec<_> = parsed
+            .types()
+            .enumerate()
+            .filter(|(_, ty)| ty.kind() == BtfKind::Int && parsed.type_name(ty).unwrap() == "same")
+            .map(|(id, _)| id as u32)
+            .collect();
+        assert_eq!(duplicates, [first, second]);
+        assert_matches!(parsed.type_by_id(0).unwrap(), BtfType::Unknown);
+        assert_eq!(parsed.string_at(name).unwrap(), "same");
+        assert_eq!(parsed.resolve_type(tagged).unwrap(), first);
+        assert_eq!(parsed.type_size(tagged).unwrap(), 4);
+        assert_matches!(
+            parsed.resolve_type(cycle_id),
+            Err(BtfError::MaximumTypeDepthReached { .. })
+        );
+        assert_matches!(
+            parsed.type_by_id(u32::MAX),
+            Err(BtfError::UnknownBtfType { .. })
+        );
+    }
+
+    #[test]
+    fn read_only_array_and_function_shape() {
+        let mut btf = Btf::new();
+        let scalar = btf.add_type(BtfType::Int(Int::new(0, 4, IntEncoding::Signed, 0)));
+        let array = btf.add_type(BtfType::Array(Array::new(0, scalar, scalar, 3)));
+        let proto = btf.add_type(BtfType::FuncProto(FuncProto::new(
+            vec![BtfParam {
+                name_offset: 0,
+                btf_type: array,
+            }],
+            scalar,
+        )));
+        let func = btf.add_type(BtfType::Func(Func::new(0, proto, FuncLinkage::Global)));
+        let parsed = Btf::parse(&btf.to_bytes(), Endianness::default()).unwrap();
+        assert_matches!(parsed.type_by_id(array).unwrap(), BtfType::Array(ty) => {
+            assert_eq!(ty.element_type(), scalar);
+            assert_eq!(ty.index_type(), scalar);
+            assert_eq!(ty.len(), 3);
+            assert!(!ty.is_empty());
+        });
+        assert_eq!(parsed.type_size(array).unwrap(), 12);
+        assert_matches!(parsed.type_by_id(proto).unwrap(), BtfType::FuncProto(ty) => {
+            assert_eq!(ty.return_type(), scalar);
+            assert_eq!(ty.params().len(), 1);
+            assert_eq!(ty.params()[0].btf_type, array);
+        });
+        assert_matches!(parsed.type_by_id(func).unwrap(), BtfType::Func(ty) => {
+            assert_eq!(ty.proto(), proto);
+            assert_eq!(ty.linkage(), FuncLinkage::Global);
+        });
+    }
 
     fn supports<const N: usize>(supported: [BtfFeature; N]) -> impl Fn(BtfFeature) -> bool {
         move |feature| supported.contains(&feature)

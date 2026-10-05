@@ -225,6 +225,14 @@ pub aya_obj::btf::BtfType::Union(aya_obj::btf::Union)
 pub aya_obj::btf::BtfType::Unknown
 pub aya_obj::btf::BtfType::Var(aya_obj::btf::Var)
 pub aya_obj::btf::BtfType::Volatile(aya_obj::btf::Volatile)
+impl aya_obj::btf::BtfType
+pub const fn aya_obj::btf::BtfType::btf_type(&self) -> core::option::Option<u32>
+pub const fn aya_obj::btf::BtfType::kind(&self) -> aya_obj::btf::BtfKind
+pub const fn aya_obj::btf::BtfType::member_bit_field_size(&self, &aya_obj::btf::BtfMember) -> core::option::Option<usize>
+pub const fn aya_obj::btf::BtfType::member_bit_offset(&self, &aya_obj::btf::BtfMember) -> core::option::Option<usize>
+pub fn aya_obj::btf::BtfType::members(&self) -> core::option::Option<impl core::iter::traits::iterator::Iterator<Item = &aya_obj::btf::BtfMember>>
+pub const fn aya_obj::btf::BtfType::name_offset(&self) -> u32
+pub const fn aya_obj::btf::BtfType::size(&self) -> core::option::Option<u32>
 impl core::clone::Clone for aya_obj::btf::BtfType
 pub fn aya_obj::btf::BtfType::clone(&self) -> aya_obj::btf::BtfType
 impl core::fmt::Debug for aya_obj::btf::BtfType
@@ -304,6 +312,11 @@ impl core::marker::UnsafeUnpin for aya_obj::btf::VarLinkage
 impl core::panic::unwind_safe::RefUnwindSafe for aya_obj::btf::VarLinkage
 impl core::panic::unwind_safe::UnwindSafe for aya_obj::btf::VarLinkage
 #[repr(C)] pub struct aya_obj::btf::Array
+impl aya_obj::btf::Array
+pub const fn aya_obj::btf::Array::element_type(&self) -> u32
+pub const fn aya_obj::btf::Array::index_type(&self) -> u32
+pub const fn aya_obj::btf::Array::is_empty(&self) -> bool
+pub const fn aya_obj::btf::Array::len(&self) -> u32
 impl core::clone::Clone for aya_obj::btf::Array
 pub fn aya_obj::btf::Array::clone(&self) -> aya_obj::btf::Array
 impl core::fmt::Debug for aya_obj::btf::Array
@@ -324,7 +337,13 @@ pub fn aya_obj::btf::Btf::id_by_type_name_kind(&self, &str, aya_obj::btf::BtfKin
 pub fn aya_obj::btf::Btf::new() -> Self
 pub fn aya_obj::btf::Btf::parse(&[u8], object::endian::Endianness) -> core::result::Result<Self, aya_obj::btf::BtfError>
 pub fn aya_obj::btf::Btf::parse_file<P: core::convert::AsRef<std::path::Path>>(P, object::endian::Endianness) -> core::result::Result<Self, aya_obj::btf::BtfError>
+pub fn aya_obj::btf::Btf::resolve_type(&self, u32) -> core::result::Result<u32, aya_obj::btf::BtfError>
+pub fn aya_obj::btf::Btf::string_at(&self, u32) -> core::result::Result<alloc::borrow::Cow<'_, str>, aya_obj::btf::BtfError>
 pub fn aya_obj::btf::Btf::to_bytes(&self) -> alloc::vec::Vec<u8>
+pub fn aya_obj::btf::Btf::type_by_id(&self, u32) -> core::result::Result<&aya_obj::btf::BtfType, aya_obj::btf::BtfError>
+pub fn aya_obj::btf::Btf::type_name(&self, &aya_obj::btf::BtfType) -> core::result::Result<alloc::borrow::Cow<'_, str>, aya_obj::btf::BtfError>
+pub fn aya_obj::btf::Btf::type_size(&self, u32) -> core::result::Result<usize, aya_obj::btf::BtfError>
+pub fn aya_obj::btf::Btf::types(&self) -> impl core::iter::traits::iterator::Iterator<Item = &aya_obj::btf::BtfType>
 impl core::clone::Clone for aya_obj::btf::Btf
 pub fn aya_obj::btf::Btf::clone(&self) -> aya_obj::btf::Btf
 impl core::default::Default for aya_obj::btf::Btf
@@ -356,7 +375,9 @@ impl core::panic::unwind_safe::RefUnwindSafe for aya_obj::btf::BtfEnum
 impl core::panic::unwind_safe::UnwindSafe for aya_obj::btf::BtfEnum
 #[repr(C)] pub struct aya_obj::btf::BtfEnum64
 impl aya_obj::btf::BtfEnum64
+pub const fn aya_obj::btf::BtfEnum64::name_offset(&self) -> u32
 pub const fn aya_obj::btf::BtfEnum64::new(u32, u64) -> Self
+pub const fn aya_obj::btf::BtfEnum64::value(&self) -> u64
 impl core::clone::Clone for aya_obj::btf::BtfEnum64
 pub fn aya_obj::btf::BtfEnum64::clone(&self) -> aya_obj::btf::BtfEnum64
 impl core::fmt::Debug for aya_obj::btf::BtfEnum64
@@ -381,6 +402,22 @@ impl core::marker::Unpin for aya_obj::btf::BtfExt
 impl core::marker::UnsafeUnpin for aya_obj::btf::BtfExt
 impl core::panic::unwind_safe::RefUnwindSafe for aya_obj::btf::BtfExt
 impl core::panic::unwind_safe::UnwindSafe for aya_obj::btf::BtfExt
+#[repr(C)] pub struct aya_obj::btf::BtfMember
+impl aya_obj::btf::BtfMember
+pub const fn aya_obj::btf::BtfMember::btf_type(&self) -> u32
+pub const fn aya_obj::btf::BtfMember::name_offset(&self) -> u32
+pub const fn aya_obj::btf::BtfMember::offset(&self) -> u32
+impl core::clone::Clone for aya_obj::btf::BtfMember
+pub fn aya_obj::btf::BtfMember::clone(&self) -> aya_obj::btf::BtfMember
+impl core::fmt::Debug for aya_obj::btf::BtfMember
+pub fn aya_obj::btf::BtfMember::fmt(&self, &mut core::fmt::Formatter<'_>) -> core::fmt::Result
+impl core::marker::Freeze for aya_obj::btf::BtfMember
+impl core::marker::Send for aya_obj::btf::BtfMember
+impl core::marker::Sync for aya_obj::btf::BtfMember
+impl core::marker::Unpin for aya_obj::btf::BtfMember
+impl core::marker::UnsafeUnpin for aya_obj::btf::BtfMember
+impl core::panic::unwind_safe::RefUnwindSafe for aya_obj::btf::BtfMember
+impl core::panic::unwind_safe::UnwindSafe for aya_obj::btf::BtfMember
 #[repr(C)] pub struct aya_obj::btf::BtfParam
 pub aya_obj::btf::BtfParam::btf_type: u32
 pub aya_obj::btf::BtfParam::name_offset: u32
@@ -467,7 +504,9 @@ impl core::panic::unwind_safe::RefUnwindSafe for aya_obj::btf::DeclTag
 impl core::panic::unwind_safe::UnwindSafe for aya_obj::btf::DeclTag
 #[repr(C)] pub struct aya_obj::btf::Enum
 impl aya_obj::btf::Enum
+pub const fn aya_obj::btf::Enum::is_signed(&self) -> bool
 pub const fn aya_obj::btf::Enum::new(u32, bool, alloc::vec::Vec<aya_obj::btf::BtfEnum>) -> Self
+pub fn aya_obj::btf::Enum::variants(&self) -> &[aya_obj::btf::BtfEnum]
 impl core::clone::Clone for aya_obj::btf::Enum
 pub fn aya_obj::btf::Enum::clone(&self) -> aya_obj::btf::Enum
 impl core::fmt::Debug for aya_obj::btf::Enum
@@ -481,7 +520,9 @@ impl core::panic::unwind_safe::RefUnwindSafe for aya_obj::btf::Enum
 impl core::panic::unwind_safe::UnwindSafe for aya_obj::btf::Enum
 #[repr(C)] pub struct aya_obj::btf::Enum64
 impl aya_obj::btf::Enum64
+pub const fn aya_obj::btf::Enum64::is_signed(&self) -> bool
 pub const fn aya_obj::btf::Enum64::new(u32, bool, alloc::vec::Vec<aya_obj::btf::BtfEnum64>) -> Self
+pub fn aya_obj::btf::Enum64::variants(&self) -> &[aya_obj::btf::BtfEnum64]
 impl core::clone::Clone for aya_obj::btf::Enum64
 pub fn aya_obj::btf::Enum64::clone(&self) -> aya_obj::btf::Enum64
 impl core::fmt::Debug for aya_obj::btf::Enum64
@@ -509,7 +550,9 @@ impl core::panic::unwind_safe::RefUnwindSafe for aya_obj::btf::Float
 impl core::panic::unwind_safe::UnwindSafe for aya_obj::btf::Float
 #[repr(C)] pub struct aya_obj::btf::Func
 impl aya_obj::btf::Func
+pub fn aya_obj::btf::Func::linkage(&self) -> aya_obj::btf::FuncLinkage
 pub const fn aya_obj::btf::Func::new(u32, u32, aya_obj::btf::FuncLinkage) -> Self
+pub const fn aya_obj::btf::Func::proto(&self) -> u32
 impl core::clone::Clone for aya_obj::btf::Func
 pub fn aya_obj::btf::Func::clone(&self) -> aya_obj::btf::Func
 impl core::fmt::Debug for aya_obj::btf::Func
@@ -537,6 +580,8 @@ impl core::panic::unwind_safe::UnwindSafe for aya_obj::btf::FuncInfo
 #[repr(C)] pub struct aya_obj::btf::FuncProto
 impl aya_obj::btf::FuncProto
 pub const fn aya_obj::btf::FuncProto::new(alloc::vec::Vec<aya_obj::btf::BtfParam>, u32) -> Self
+pub fn aya_obj::btf::FuncProto::params(&self) -> &[aya_obj::btf::BtfParam]
+pub const fn aya_obj::btf::FuncProto::return_type(&self) -> u32
 impl core::clone::Clone for aya_obj::btf::FuncProto
 pub fn aya_obj::btf::FuncProto::clone(&self) -> aya_obj::btf::FuncProto
 impl core::fmt::Debug for aya_obj::btf::FuncProto
@@ -581,7 +626,10 @@ impl core::panic::unwind_safe::RefUnwindSafe for aya_obj::btf::Fwd
 impl core::panic::unwind_safe::UnwindSafe for aya_obj::btf::Fwd
 #[repr(C)] pub struct aya_obj::btf::Int
 impl aya_obj::btf::Int
+pub const fn aya_obj::btf::Int::bits(&self) -> u32
+pub fn aya_obj::btf::Int::encoding(&self) -> aya_obj::btf::IntEncoding
 pub const fn aya_obj::btf::Int::new(u32, u32, aya_obj::btf::IntEncoding, u32) -> Self
+pub const fn aya_obj::btf::Int::offset(&self) -> u32
 impl core::clone::Clone for aya_obj::btf::Int
 pub fn aya_obj::btf::Int::clone(&self) -> aya_obj::btf::Int
 impl core::fmt::Debug for aya_obj::btf::Int
@@ -639,6 +687,8 @@ impl core::marker::UnsafeUnpin for aya_obj::btf::Restrict
 impl core::panic::unwind_safe::RefUnwindSafe for aya_obj::btf::Restrict
 impl core::panic::unwind_safe::UnwindSafe for aya_obj::btf::Restrict
 #[repr(C)] pub struct aya_obj::btf::Struct
+impl aya_obj::btf::Struct
+pub fn aya_obj::btf::Struct::members(&self) -> &[aya_obj::btf::BtfMember]
 impl core::clone::Clone for aya_obj::btf::Struct
 pub fn aya_obj::btf::Struct::clone(&self) -> aya_obj::btf::Struct
 impl core::fmt::Debug for aya_obj::btf::Struct
@@ -677,6 +727,8 @@ impl core::marker::UnsafeUnpin for aya_obj::btf::Typedef
 impl core::panic::unwind_safe::RefUnwindSafe for aya_obj::btf::Typedef
 impl core::panic::unwind_safe::UnwindSafe for aya_obj::btf::Typedef
 #[repr(C)] pub struct aya_obj::btf::Union
+impl aya_obj::btf::Union
+pub fn aya_obj::btf::Union::members(&self) -> &[aya_obj::btf::BtfMember]
 impl core::clone::Clone for aya_obj::btf::Union
 pub fn aya_obj::btf::Union::clone(&self) -> aya_obj::btf::Union
 impl core::fmt::Debug for aya_obj::btf::Union
