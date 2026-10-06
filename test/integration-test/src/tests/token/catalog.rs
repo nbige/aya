@@ -2,9 +2,10 @@ use anyhow::{Context as _, Result};
 use aya::{
     Ebpf, EbpfLoader,
     features::Features,
+    programs::ProgramType,
     token::{BpfToken, FilesystemPermissions, FilesystemPermissionsBuilder},
 };
-use aya_obj::{attach::BpfAttachType, cmd::BpfCommand, programs::BpfProgType};
+use aya_obj::{attach::BpfAttachType, cmd::BpfCommand};
 
 use super::harness::CapabilityProfile;
 
@@ -32,8 +33,8 @@ enum ProgramPermission {
 impl ProgramPermission {
     fn allow(self, builder: FilesystemPermissionsBuilder) -> FilesystemPermissionsBuilder {
         builder.allow_prog_type(match self {
-            Self::Xdp => BpfProgType::Xdp,
-            Self::Tracepoint => BpfProgType::Tracepoint,
+            Self::Xdp => ProgramType::Xdp,
+            Self::Tracepoint => ProgramType::TracePoint,
         })
     }
 }

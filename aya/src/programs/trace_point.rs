@@ -12,7 +12,7 @@ use crate::{
     programs::{
         ProgramData, ProgramError, ProgramType, define_link_wrapper, impl_try_from_fdlink,
         impl_try_into_fdlink, load_program_without_attach_type,
-        perf_attach::{PerfLinkIdInner, PerfLinkInner, attach_perf_event, perf_attach},
+        perf_attach::{PerfLinkIdInner, PerfLinkInner, perf_attach},
         utils::find_tracefs_path,
     },
     sys::{SyscallError, perf_event_open_trace_point},
@@ -96,21 +96,30 @@ impl TracePoint {
 
     /// Attaches this program to a caller-supplied perf event descriptor.
     ///
-    /// The descriptor is consumed and owned by the returned link. This path
-    /// uses `PERF_EVENT_IOC_SET_BPF` and `PERF_EVENT_IOC_ENABLE` directly and
-    /// does not open another perf event.
+    /// The descriptor is consumed and owned by the returned link, which is stored in this
+    /// program like any other: use the returned [`TracePointLinkId`] with
+    /// [`TracePoint::detach`] or [`TracePoint::take_link`], and dropping or unloading the
+    /// program detaches it. No perf event is opened; the program is attached to the given one
+    /// with a BPF link where the kernel supports it, and with `PERF_EVENT_IOC_SET_BPF` and
+    /// `PERF_EVENT_IOC_ENABLE` otherwise.
     ///
     /// # Errors
     ///
-    /// Returns an error if the program is not loaded or either perf ioctl fails.
+    /// Returns an error if the program is not loaded or attaching to the perf event fails.
     #[cfg(target_os = "linux")]
     pub fn attach_to_perf_event(
         &mut self,
         perf_fd: OwnedFd,
-    ) -> Result<TracePointLink, ProgramError> {
-        let prog_fd = self.fd()?.as_fd();
-        let link = attach_perf_event(prog_fd, crate::MockableFd::from_fd(perf_fd), None)?;
-        Ok(TracePointLink::new(PerfLinkInner::PerfLink(link)))
+    ) -> Result<TracePointLinkId, ProgramError> {
+        let prog_fd = self.fd()?;
+        let prog_fd = prog_fd.as_fd();
+        let link = perf_attach(
+            prog_fd,
+            crate::MockableFd::from_fd(perf_fd),
+            None, /* cookie */
+            &self.data.features,
+        )?;
+        self.data.links.insert(TracePointLink::new(link))
     }
 }
 
@@ -215,12 +224,12 @@ mod tests {
             let raw_fd = perf_fd.as_raw_fd();
             let mut program = loaded_tracepoint();
 
-            let link = program.attach_to_perf_event(perf_fd.into()).unwrap();
+            let id = program.attach_to_perf_event(perf_fd.into()).unwrap();
 
             assert_eq!(IOCTL_COUNT.get(), 2);
-            // SAFETY: `link` owns the inherited descriptor until it is dropped below.
+            // SAFETY: the stored link owns the inherited descriptor until it is detached below.
             assert_ne!(unsafe { libc::fcntl(raw_fd, libc::F_GETFD) }, -1);
-            drop(link);
+            program.detach(id).unwrap();
             // SAFETY: F_GETFD reports descriptor liveness without dereferencing memory.
             assert_eq!(unsafe { libc::fcntl(raw_fd, libc::F_GETFD) }, -1);
             assert_eq!(io::Error::last_os_error().raw_os_error(), Some(libc::EBADF));

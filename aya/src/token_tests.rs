@@ -12,7 +12,6 @@ use super::{
     FilesystemPermissionsBuilder, checked_permission_bit, ensure_cloexec,
 };
 use crate::{
-    features::Features,
     maps::{MapData, MapError},
     sys::{Syscall, override_syscall},
 };
@@ -61,14 +60,12 @@ fn kernel_enum_discriminants_fit_in_delegation_bitmask() {
 
 #[test]
 fn allow_methods_build_expected_bits_for_known_variants() {
-    use aya_obj::{
-        attach::BpfAttachType, cmd::BpfCommand, maps::BpfMapType, programs::BpfProgType,
-    };
+    use aya_obj::{attach::BpfAttachType, cmd::BpfCommand};
 
     let perms = FilesystemPermissionsBuilder::default()
         .allow_cmd(BpfCommand::MapCreate)
-        .allow_map_type(BpfMapType::Array)
-        .allow_prog_type(BpfProgType::SocketFilter)
+        .allow_map_type(crate::maps::MapType::Array)
+        .allow_prog_type(crate::programs::ProgramType::SocketFilter)
         .allow_attach_type(BpfAttachType::CgroupInetIngress)
         .build();
 
@@ -133,13 +130,7 @@ fn wrong_live_fd_fails_typed_at_first_token_operation() {
     });
     let map = aya_obj::Map::new_from_params(bpf_map_type::BPF_MAP_TYPE_ARRAY as u32, 4, 4, 1, 0);
 
-    let result = MapData::create(
-        map,
-        "wrong_token",
-        None,
-        Some(token.as_fd()),
-        Features::default(),
-    );
+    let result = MapData::create_with_token(map, "wrong_token", None, token.as_fd());
 
     assert_matches!(
         result,

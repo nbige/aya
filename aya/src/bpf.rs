@@ -57,18 +57,18 @@ unsafe impl<T: Pod, const N: usize> Pod for [T; N] {}
 
 pub use aya_obj::maps::{PinningType, bpf_map_def};
 
-static FEATURES_CACHE: std::sync::LazyLock<Features> =
-    std::sync::LazyLock::new(Features::ambient_cached);
-
-/// Returns a reference to the process-ambient detected BPF features.
+/// Returns a reference to the process-ambient BPF features.
+///
+/// Each feature is probed the first time it is queried, at most once per process.
 pub fn features() -> &'static Features {
-    &FEATURES_CACHE
+    &crate::features::AMBIENT
 }
 
 #[derive(Debug)]
 enum FeatureSelection {
     Default,
-    TokenDetect(Arc<crate::MockableFd>),
+    /// The features implied by BPF token support.
+    TokenImplied(Arc<crate::MockableFd>),
     TokenProvided(Arc<crate::MockableFd>, Features),
 }
 
@@ -297,9 +297,10 @@ impl<'a> EbpfLoader<'a> {
 
     /// Sets a BPF token and caller-supplied kernel features.
     ///
-    /// Unlike [`Self::token`], this mode performs no token-backed feature probes.
-    /// The caller must supply features detected before privilege reduction and
-    /// restricted to the delegated map and program types.
+    /// Unlike [`Self::token`], which assumes every feature implied by BPF token support (see
+    /// [`crate::sys::detect_features_with_token`]), this uses exactly the features given. Use it
+    /// to restrict the loader to features detected before privilege reduction, for example when
+    /// the token delegates only some map and program types.
     ///
     /// # Errors
     ///
@@ -330,23 +331,21 @@ impl<'a> EbpfLoader<'a> {
         let fd = Arc::new(crate::MockableFd::from_fd(fd));
         self.feature_selection = match features {
             Some(features) => FeatureSelection::TokenProvided(fd, features),
-            None => FeatureSelection::TokenDetect(fd),
+            None => FeatureSelection::TokenImplied(fd),
         };
         Ok(self)
     }
 
-    fn selected_features(&self) -> Result<(Features, Option<Arc<crate::MockableFd>>), EbpfError> {
+    fn selected_features(&self) -> (Features, Option<Arc<crate::MockableFd>>) {
         match &self.feature_selection {
-            FeatureSelection::Default => Ok((Features::ambient_cached(), None)),
-            FeatureSelection::TokenDetect(token) => {
-                use crate::sys::detect_features_with_token;
-                let features = detect_features_with_token(token.as_fd())
-                    .map_err(|error| EbpfError::TokenFeatureProbe { error })?;
-                debug!("BPF Feature Detection (with token): {features:#?}");
-                Ok((features, Some(Arc::clone(token))))
+            FeatureSelection::Default => (Features::ambient(), None),
+            FeatureSelection::TokenImplied(token) => {
+                let features = crate::sys::detect_features_with_token(token.as_fd());
+                debug!("BPF Features (implied by token): {features:#?}");
+                (features, Some(Arc::clone(token)))
             }
             FeatureSelection::TokenProvided(token, features) => {
-                Ok((features.clone(), Some(Arc::clone(token))))
+                (features.clone(), Some(Arc::clone(token)))
             }
         }
     }
@@ -551,7 +550,7 @@ impl<'a> EbpfLoader<'a> {
     /// # Ok::<(), aya::EbpfError>(())
     /// ```
     pub fn load(&mut self, data: &[u8]) -> Result<Ebpf, EbpfError> {
-        let (features, token) = self.selected_features()?;
+        let (features, token) = self.selected_features();
         let token_loading = if token.is_some() {
             TokenLoadingState::Active
         } else {
@@ -765,10 +764,11 @@ impl<'a> EbpfLoader<'a> {
                     PinningType::None => {
                         let btf_inner_map;
                         let inner_map_fd = if let Some(inner) = inner_map_obj {
-                            btf_inner_map = MapData::create(
+                            btf_inner_map = MapData::create_with_inner_map_fd(
                                 inner,
                                 &format!("{name}.inner"),
                                 btf_fd,
+                                None,
                                 token_fd,
                                 features.clone(),
                             )?;
@@ -1108,7 +1108,7 @@ fn max_entries_override(
 
 /// Computes the value which should be used to override the `value_size` value of the map
 /// based on the rules for that map type.
-const fn value_size_override(map_type: bpf_map_type, features: &Features) -> Option<u32> {
+fn value_size_override(map_type: bpf_map_type, features: &Features) -> Option<u32> {
     match map_type {
         bpf_map_type::BPF_MAP_TYPE_CPUMAP => Some(if features.cpumap_prog_id() { 8 } else { 4 }),
         bpf_map_type::BPF_MAP_TYPE_DEVMAP | bpf_map_type::BPF_MAP_TYPE_DEVMAP_HASH => {
@@ -1546,16 +1546,6 @@ pub enum EbpfError {
     /// Token feature selection was configured more than once.
     #[error("BPF token feature selection is already configured")]
     TokenFeatureSelectionConflict,
-
-    /// Probing kernel features through the BPF token failed for a reason other than the kernel
-    /// lacking the probed feature, such as the token not delegating the probe's own program or
-    /// map type.
-    #[error("failed to detect kernel features using the BPF token")]
-    TokenFeatureProbe {
-        #[source]
-        /// The original [`io::Error`].
-        error: io::Error,
-    },
 
     /// Token loading is unavailable because the object was loaded without a token.
     #[error("the eBPF object was loaded without a BPF token")]

@@ -1,13 +1,12 @@
-//! A snapshot of kernel feature support.
+//! Kernel feature support.
 //!
-//! Most callers use the process-ambient snapshot ([`Features::ambient`]), which is derived from
-//! [`crate::kernel_features::FEATURES`] and therefore benefits from its per-feature caching.
-//! Loading through a BPF token instead uses [`Features::detect_with_token`], which performs no
-//! probes at all: `BPF_TOKEN_CREATE` requires Linux 6.9, and every feature this snapshot tracks
-//! landed years before that, so the token's mere existence already proves the kernel supports
-//! all of them.
-
-use std::{io, os::fd::BorrowedFd, sync::LazyLock};
+//! Most callers use the process-ambient feature set ([`Features::ambient`]), which reads
+//! through [`crate::kernel_features::FEATURES`]. Nothing is probed until a feature is queried,
+//! and each feature is probed at most once per process.
+//! Loading through a BPF token instead uses [`Features::implied_by_token`], which performs no
+//! probes at all: `BPF_TOKEN_CREATE` requires Linux 6.9, and every feature tracked here landed
+//! years before that, so the token's mere existence already proves the kernel supports all of
+//! them.
 
 use aya_obj::btf::BtfFeature;
 
@@ -34,7 +33,7 @@ const fn version_at_most(version: MinKernelVersion, max: MinKernelVersion) -> bo
 /// [`TOKEN_IMPLIED_FEATURE_VERSIONS`] and [`TOKEN_IMPLIED_BTF_FEATURE_VERSIONS`].
 const MIN_TOKEN_KERNEL_VERSION: MinKernelVersion = (6, 9, 0);
 
-/// Minimum kernel version for each non-BTF feature [`Features::detect_with_token`] tracks. Every
+/// Minimum kernel version for each non-BTF feature [`Features::implied_by_token`] tracks. Every
 /// entry predates [`MIN_TOKEN_KERNEL_VERSION`], so none of them needs a live probe when a token
 /// is in use: the token's own existence already proves the kernel is new enough.
 ///
@@ -58,7 +57,7 @@ const TOKEN_IMPLIED_FEATURE_VERSIONS: [(&str, MinKernelVersion); 7] = [
 ];
 
 /// Minimum kernel version for `BPF_BTF_LOAD` itself and each [`BtfFeature`]
-/// [`Features::detect_with_token`] tracks. This is the kernel's acceptance of a *user-supplied*
+/// [`Features::implied_by_token`] tracks. This is the kernel's acceptance of a *user-supplied*
 /// BTF blob passed to `BPF_BTF_LOAD`/`BPF_PROG_LOAD`/`BPF_MAP_CREATE`, gated purely by kernel
 /// version (`CONFIG_BPF_SYSCALL`), unlike the *kernel's own* embedded vmlinux BTF exposed at
 /// `/sys/kernel/btf/vmlinux`, which depends on the build-time `CONFIG_DEBUG_INFO_BTF` option and
@@ -105,9 +104,27 @@ const _: () = {
     }
 };
 
-/// BTF capabilities of a [`Features`] snapshot.
+/// BTF capabilities of a [`Features`] set.
 #[derive(Clone, Debug, Default, PartialEq, Eq)]
 pub struct BtfCapabilities {
+    repr: BtfRepr,
+}
+
+#[derive(Clone, Debug, PartialEq, Eq)]
+enum BtfRepr {
+    /// Reads through to the process-wide probes, which run lazily.
+    Ambient,
+    Fixed(FixedBtfCapabilities),
+}
+
+impl Default for BtfRepr {
+    fn default() -> Self {
+        Self::Fixed(FixedBtfCapabilities::default())
+    }
+}
+
+#[derive(Clone, Debug, Default, PartialEq, Eq)]
+struct FixedBtfCapabilities {
     func: bool,
     func_global: bool,
     datasec: bool,
@@ -119,9 +136,21 @@ pub struct BtfCapabilities {
 }
 
 impl BtfCapabilities {
+    const AMBIENT: Self = Self {
+        repr: BtfRepr::Ambient,
+    };
+
     /// Returns whether the given BTF feature is supported.
-    pub const fn is_supported(&self, feature: BtfFeature) -> bool {
-        let Self {
+    pub fn is_supported(&self, feature: BtfFeature) -> bool {
+        let fixed = match &self.repr {
+            BtfRepr::Ambient => {
+                return FEATURES
+                    .btf()
+                    .is_some_and(|capabilities| capabilities.is_supported(feature));
+            }
+            BtfRepr::Fixed(fixed) => fixed,
+        };
+        let FixedBtfCapabilities {
             func,
             func_global,
             datasec,
@@ -130,7 +159,7 @@ impl BtfCapabilities {
             decl_tag,
             type_tag,
             enum64,
-        } = self;
+        } = fixed;
         match feature {
             BtfFeature::Func => *func,
             BtfFeature::FuncGlobal => *func_global,
@@ -144,10 +173,31 @@ impl BtfCapabilities {
     }
 }
 
-/// Kernel BPF and BTF feature support, either the process-ambient set or one probed through a
-/// specific BPF token.
+/// Kernel BPF and BTF feature support, either the process-ambient set or the set implied by a
+/// BPF token.
+///
+/// The ambient set is evaluated lazily: each feature is probed the first time it is queried and
+/// the result is shared by the whole process.
 #[derive(Clone, Debug, Default, PartialEq, Eq)]
 pub struct Features {
+    repr: FeaturesRepr,
+}
+
+#[derive(Clone, Debug, PartialEq, Eq)]
+enum FeaturesRepr {
+    /// Reads through to the process-wide probes, which run lazily.
+    Ambient,
+    Fixed(FixedFeatures),
+}
+
+impl Default for FeaturesRepr {
+    fn default() -> Self {
+        Self::Fixed(FixedFeatures::default())
+    }
+}
+
+#[derive(Clone, Debug, Default, PartialEq, Eq)]
+struct FixedFeatures {
     bpf_name: bool,
     bpf_probe_read_kernel: bool,
     bpf_perf_link: bool,
@@ -176,54 +226,34 @@ impl Features {
         btf: Option<BtfCapabilities>,
     ) -> Self {
         Self {
-            bpf_name,
-            bpf_probe_read_kernel,
-            bpf_perf_link,
-            bpf_global_data,
-            bpf_cookie,
-            cpumap_prog_id,
-            devmap_prog_id,
-            btf,
-        }
-    }
-
-    /// Snapshots the process-ambient feature set.
-    ///
-    /// This reads through to [`crate::kernel_features::FEATURES`], so each underlying feature is
-    /// still probed at most once per process.
-    fn ambient() -> Self {
-        Self {
-            bpf_name: FEATURES.is_supported(Feature::BpfName),
-            bpf_probe_read_kernel: FEATURES.is_supported(Feature::BpfProbeReadKernel),
-            bpf_perf_link: FEATURES.is_supported(Feature::BpfPerfLink),
-            bpf_global_data: FEATURES.is_supported(Feature::BpfGlobalData),
-            bpf_cookie: FEATURES.is_supported(Feature::BpfCookie),
-            cpumap_prog_id: FEATURES.is_supported(Feature::CpuMapProgId),
-            devmap_prog_id: FEATURES.is_supported(Feature::DevMapProgId),
-            btf: FEATURES.btf().map(|caps| BtfCapabilities {
-                func: caps.is_supported(BtfFeature::Func),
-                func_global: caps.is_supported(BtfFeature::FuncGlobal),
-                datasec: caps.is_supported(BtfFeature::DataSec),
-                datasec_zero: caps.is_supported(BtfFeature::DataSecZero),
-                float: caps.is_supported(BtfFeature::Float),
-                decl_tag: caps.is_supported(BtfFeature::DeclTag),
-                type_tag: caps.is_supported(BtfFeature::TypeTag),
-                enum64: caps.is_supported(BtfFeature::Enum64),
+            repr: FeaturesRepr::Fixed(FixedFeatures {
+                bpf_name,
+                bpf_probe_read_kernel,
+                bpf_perf_link,
+                bpf_global_data,
+                bpf_cookie,
+                cpumap_prog_id,
+                devmap_prog_id,
+                btf,
             }),
         }
     }
 
-    /// Returns the process-ambient feature set, computed once and cached for the process.
-    pub(crate) fn ambient_cached() -> Self {
-        static AMBIENT: LazyLock<Features> = LazyLock::new(Features::ambient);
-        AMBIENT.clone()
+    /// Returns the process-ambient feature set.
+    ///
+    /// This is a handle onto [`crate::kernel_features::FEATURES`]: constructing it probes
+    /// nothing, and each feature is probed at most once per process, when it is first queried.
+    pub(crate) const fn ambient() -> Self {
+        Self {
+            repr: FeaturesRepr::Ambient,
+        }
     }
 
-    /// Detects BPF and BTF features implied by the given BPF token's privilege delegation.
+    /// Returns the features implied by BPF token support.
     ///
     /// This performs no probe syscalls. `BPF_TOKEN_CREATE` itself requires Linux 6.9
-    /// (see [`MIN_TOKEN_KERNEL_VERSION`]), and every feature and BTF capability this snapshot
-    /// tracks landed years earlier (see [`TOKEN_IMPLIED_FEATURE_VERSIONS`] and
+    /// (see [`MIN_TOKEN_KERNEL_VERSION`]), and every feature and BTF capability tracked here
+    /// landed years earlier (see [`TOKEN_IMPLIED_FEATURE_VERSIONS`] and
     /// [`TOKEN_IMPLIED_BTF_FEATURE_VERSIONS`]), so a token's mere existence already proves the
     /// kernel supports all of them: there is nothing left to determine by probing.
     ///
@@ -233,113 +263,116 @@ impl Features {
     /// `BPF_PROG_TYPE_SOCKET_FILTER`) chosen without regard to what the caller's token actually
     /// delegates. A token that delegates only the program and map types a real load needs can
     /// reject a probe's unrelated type with a permission error unrelated to whether the kernel
-    /// supports the feature under test, previously either misread as "unsupported" (silently
-    /// dropping global-data maps and breaking relocations) or, if propagated faithfully, failing
-    /// a load the token and kernel both fully support.
+    /// supports the feature under test, which would either be misread as "unsupported"
+    /// (silently dropping global-data maps and breaking relocations) or, if propagated
+    /// faithfully, fail a load the token and kernel both fully support.
     ///
     /// This intentionally excludes reading the kernel's own embedded vmlinux BTF from
     /// `/sys/kernel/btf/vmlinux` (used elsewhere for [`crate::programs::ProgramInfo`]-driven
     /// CO-RE against kernel types): that depends on the build-time `CONFIG_DEBUG_INFO_BTF`
-    /// option rather than kernel version, is not part of this snapshot, is read directly from
-    /// that file rather than probed through the token, and is unaffected by this change.
-    #[expect(
-        clippy::unnecessary_wraps,
-        reason = "kept for API stability across call sites"
-    )]
-    pub(crate) const fn detect_with_token(_token_fd: BorrowedFd<'_>) -> io::Result<Self> {
-        Ok(Self {
-            bpf_name: true,
-            bpf_probe_read_kernel: true,
-            bpf_perf_link: true,
-            bpf_global_data: true,
-            bpf_cookie: true,
-            cpumap_prog_id: true,
-            devmap_prog_id: true,
-            btf: Some(BtfCapabilities {
-                func: true,
-                func_global: true,
-                datasec: true,
-                datasec_zero: true,
-                float: true,
-                decl_tag: true,
-                type_tag: true,
-                enum64: true,
+    /// option rather than kernel version and is read directly from that file.
+    pub(crate) const fn implied_by_token() -> Self {
+        Self {
+            repr: FeaturesRepr::Fixed(FixedFeatures {
+                bpf_name: true,
+                bpf_probe_read_kernel: true,
+                bpf_perf_link: true,
+                bpf_global_data: true,
+                bpf_cookie: true,
+                cpumap_prog_id: true,
+                devmap_prog_id: true,
+                btf: Some(BtfCapabilities {
+                    repr: BtfRepr::Fixed(FixedBtfCapabilities {
+                        func: true,
+                        func_global: true,
+                        datasec: true,
+                        datasec_zero: true,
+                        float: true,
+                        decl_tag: true,
+                        type_tag: true,
+                        enum64: true,
+                    }),
+                }),
             }),
-        })
+        }
+    }
+
+    fn get(&self, feature: Feature, fixed: fn(&FixedFeatures) -> bool) -> bool {
+        match &self.repr {
+            FeaturesRepr::Ambient => FEATURES.is_supported(feature),
+            FeaturesRepr::Fixed(features) => fixed(features),
+        }
     }
 
     /// Returns whether BPF program names and map names are supported.
-    pub const fn bpf_name(&self) -> bool {
-        self.bpf_name
+    pub fn bpf_name(&self) -> bool {
+        self.get(Feature::BpfName, |f| f.bpf_name)
     }
 
     /// Returns whether the `bpf_probe_read_kernel` helper is supported.
-    pub const fn bpf_probe_read_kernel(&self) -> bool {
-        self.bpf_probe_read_kernel
+    pub fn bpf_probe_read_kernel(&self) -> bool {
+        self.get(Feature::BpfProbeReadKernel, |f| f.bpf_probe_read_kernel)
     }
 
     /// Returns whether `bpf_links` are supported for Kprobes/Uprobes/Tracepoints.
-    pub const fn bpf_perf_link(&self) -> bool {
-        self.bpf_perf_link
+    pub fn bpf_perf_link(&self) -> bool {
+        self.get(Feature::BpfPerfLink, |f| f.bpf_perf_link)
     }
 
     /// Returns whether BPF program global data is supported.
-    pub const fn bpf_global_data(&self) -> bool {
-        self.bpf_global_data
+    pub fn bpf_global_data(&self) -> bool {
+        self.get(Feature::BpfGlobalData, |f| f.bpf_global_data)
     }
 
     /// Returns whether BPF program cookie is supported.
-    pub const fn bpf_cookie(&self) -> bool {
-        self.bpf_cookie
+    pub fn bpf_cookie(&self) -> bool {
+        self.get(Feature::BpfCookie, |f| f.bpf_cookie)
     }
 
     /// Returns whether XDP CPU Maps support chained program IDs.
-    pub const fn cpumap_prog_id(&self) -> bool {
-        self.cpumap_prog_id
+    pub fn cpumap_prog_id(&self) -> bool {
+        self.get(Feature::CpuMapProgId, |f| f.cpumap_prog_id)
     }
 
     /// Returns whether XDP Device Maps support chained program IDs.
-    pub const fn devmap_prog_id(&self) -> bool {
-        self.devmap_prog_id
+    pub fn devmap_prog_id(&self) -> bool {
+        self.get(Feature::DevMapProgId, |f| f.devmap_prog_id)
     }
 
     /// If BTF is supported, returns which BTF features are supported.
-    pub const fn btf(&self) -> Option<&BtfCapabilities> {
-        self.btf.as_ref()
+    pub fn btf(&self) -> Option<&BtfCapabilities> {
+        match &self.repr {
+            FeaturesRepr::Ambient => FEATURES
+                .btf()
+                .is_some()
+                .then_some(&BtfCapabilities::AMBIENT),
+            FeaturesRepr::Fixed(features) => features.btf.as_ref(),
+        }
     }
 }
 
+/// The process-ambient feature set. Nothing is probed until a feature is queried.
+pub(crate) static AMBIENT: Features = Features::ambient();
+
 #[cfg(test)]
 mod tests {
-    use std::{cell::Cell, os::fd::BorrowedFd};
+    use aya_obj::btf::BtfFeature;
 
-    use super::Features;
+    use super::{BtfCapabilities, Features};
     use crate::sys::override_syscall;
 
-    const TOKEN_FD: std::os::fd::RawFd = 42;
-
-    thread_local! {
-        static SYSCALL_COUNT: Cell<usize> = const { Cell::new(0) };
-    }
-
-    /// `detect_with_token` must not issue any probe syscall: `BPF_TOKEN_CREATE` requires Linux
-    /// 6.9, every feature this snapshot tracks landed years before that, and probing anyway can
+    /// `implied_by_token` must not issue any probe syscall: `BPF_TOKEN_CREATE` requires Linux
+    /// 6.9, every feature tracked here landed years before that, and probing anyway can
     /// spuriously fail (or spuriously succeed) against a token that does not delegate a given
     /// probe's own hardcoded program or map type, unrelated to whether the feature under test is
     /// actually supported. Every flag must still come back `true`.
     #[test]
-    fn detect_with_token_probes_nothing_and_reports_full_support() {
-        SYSCALL_COUNT.set(0);
+    fn implied_by_token_probes_nothing_and_reports_full_support() {
         override_syscall(|call| {
-            SYSCALL_COUNT.set(SYSCALL_COUNT.get() + 1);
             panic!("unexpected syscall during token-implied feature detection: {call:?}");
         });
 
-        // SAFETY: TOKEN_FD is used only as an opaque integer; no syscall touches it.
-        let token_fd = unsafe { BorrowedFd::borrow_raw(TOKEN_FD) };
-        let features = Features::detect_with_token(token_fd).unwrap();
-
-        assert_eq!(SYSCALL_COUNT.get(), 0);
+        let features = Features::implied_by_token();
 
         assert!(features.bpf_name());
         assert!(features.bpf_probe_read_kernel());
@@ -350,14 +383,42 @@ mod tests {
         assert!(features.devmap_prog_id());
 
         let btf = features.btf().expect("BTF support must be implied");
-        assert!(btf.is_supported(aya_obj::btf::BtfFeature::Func));
-        assert!(btf.is_supported(aya_obj::btf::BtfFeature::FuncGlobal));
-        assert!(btf.is_supported(aya_obj::btf::BtfFeature::DataSec));
-        assert!(btf.is_supported(aya_obj::btf::BtfFeature::DataSecZero));
-        assert!(btf.is_supported(aya_obj::btf::BtfFeature::Float));
-        assert!(btf.is_supported(aya_obj::btf::BtfFeature::DeclTag));
-        assert!(btf.is_supported(aya_obj::btf::BtfFeature::TypeTag));
-        assert!(btf.is_supported(aya_obj::btf::BtfFeature::Enum64));
+        for feature in [
+            BtfFeature::Func,
+            BtfFeature::FuncGlobal,
+            BtfFeature::DataSec,
+            BtfFeature::DataSecZero,
+            BtfFeature::Float,
+            BtfFeature::DeclTag,
+            BtfFeature::TypeTag,
+            BtfFeature::Enum64,
+        ] {
+            assert!(btf.is_supported(feature), "{feature:?}");
+        }
+    }
+
+    /// Obtaining the ambient feature set must not probe: only the features a caller actually
+    /// queries may cost a syscall.
+    #[test]
+    fn ambient_probes_nothing_until_queried() {
+        override_syscall(|call| {
+            panic!("unexpected syscall while constructing ambient features: {call:?}");
+        });
+
+        let features = Features::ambient();
+        assert_eq!(features, crate::features::AMBIENT);
+        assert_ne!(features, Features::default());
+        assert_ne!(features, Features::implied_by_token());
+        assert_eq!(BtfCapabilities::default(), BtfCapabilities::default());
+    }
+
+    #[test]
+    fn default_reports_no_support() {
+        let features = Features::default();
+        assert!(!features.bpf_name());
+        assert!(!features.bpf_cookie());
+        assert!(!features.cpumap_prog_id());
+        assert!(features.btf().is_none());
     }
 
     #[test]

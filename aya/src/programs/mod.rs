@@ -688,7 +688,7 @@ impl<T: Link> ProgramData<T> {
             info.0,
             verifier_log_level,
             None,
-            Features::ambient_cached(),
+            Features::ambient(),
         )
     }
 }
@@ -1459,7 +1459,7 @@ macro_rules! impl_from_prog_info {
                         bpf_program_info,
                         VerifierLogLevel::default(),
                         None,
-                        Features::ambient_cached(),
+                        Features::ambient(),
                     )?,
                     $($var,)?
                     $($extra_field: $extra_value,)*

@@ -31,11 +31,9 @@ use aya_obj::{
     attach::BpfAttachType,
     cmd::BpfCommand,
     generated::{bpf_attach_type, bpf_cmd, bpf_map_type, bpf_prog_type},
-    maps::BpfMapType,
-    programs::BpfProgType,
 };
 
-use crate::sys::bpf_token_create;
+use crate::{maps::MapType, programs::ProgramType, sys::bpf_token_create};
 
 #[cfg(test)]
 #[path = "token_tests.rs"]
@@ -331,14 +329,13 @@ pub struct FilesystemPermissions {
 /// ```no_run
 /// use aya::token::FilesystemPermissionsBuilder;
 /// use aya_obj::cmd::BpfCommand;
-/// use aya_obj::programs::BpfProgType;
-/// use aya_obj::maps::BpfMapType;
+/// use aya::{maps::MapType, programs::ProgramType};
 ///
 /// let perms = FilesystemPermissionsBuilder::default()
 ///     .allow_cmd(BpfCommand::MapCreate)
 ///     .allow_cmd(BpfCommand::ProgLoad)
-///     .allow_prog_type(BpfProgType::SocketFilter)
-///     .allow_map_type(BpfMapType::Array)
+///     .allow_prog_type(ProgramType::SocketFilter)
+///     .allow_map_type(MapType::Array)
 ///     .uid(1000)
 ///     .build();
 ///
@@ -377,17 +374,17 @@ impl FilesystemPermissionsBuilder {
 
     /// Allows the given map type to be created by token holders.
     #[must_use]
-    pub fn allow_map_type(mut self, map_type: BpfMapType) -> Self {
+    pub fn allow_map_type(mut self, map_type: MapType) -> Self {
         let map_type: bpf_map_type = map_type.into();
-        self.perms.delegate_maps |= checked_permission_bit("BpfMapType", map_type as u64);
+        self.perms.delegate_maps |= checked_permission_bit("MapType", map_type as u64);
         self
     }
 
     /// Allows the given program type to be loaded by token holders.
     #[must_use]
-    pub fn allow_prog_type(mut self, prog_type: BpfProgType) -> Self {
+    pub fn allow_prog_type(mut self, prog_type: ProgramType) -> Self {
         let prog_type: bpf_prog_type = prog_type.into();
-        self.perms.delegate_progs |= checked_permission_bit("BpfProgType", prog_type as u64);
+        self.perms.delegate_progs |= checked_permission_bit("ProgramType", prog_type as u64);
         self
     }
 

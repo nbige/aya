@@ -15,7 +15,7 @@ use aya::{
     programs::Xdp,
     token::{BpfFilesystemContext, BpfToken, FilesystemPermissionsBuilder},
 };
-use aya_obj::{cmd::BpfCommand, maps::BpfMapType};
+use aya_obj::cmd::BpfCommand;
 
 use self::{
     artifact::validate_pass_artifact,
@@ -59,10 +59,10 @@ fn token_create_in_initial_userns_returns_eopnotsupp() {
 fn token_map_create_in_owning_userns() {
     let permissions = FilesystemPermissionsBuilder::default()
         .allow_cmd(BpfCommand::MapCreate)
-        .allow_map_type(BpfMapType::Array)
+        .allow_map_type(aya::maps::MapType::Array)
         .build();
     run_in_token_userns(permissions, CapabilityProfile::Token, |_bpffs, token| {
-        let map = MapData::create(
+        let map = MapData::create_with_token(
             aya_obj::Map::Legacy(aya_obj::maps::LegacyMap {
                 def: aya_obj::maps::bpf_map_def {
                     map_type: aya_obj::generated::bpf_map_type::BPF_MAP_TYPE_ARRAY as u32,
@@ -79,8 +79,7 @@ fn token_map_create_in_owning_userns() {
             }),
             "aya_token_map",
             None,
-            Some(token.as_fd()),
-            Default::default(),
+            token.as_fd(),
         )?;
         assert!(map.fd().as_fd().as_raw_fd() >= 0);
         Ok(())
@@ -126,8 +125,8 @@ fn token_prog_load_in_owning_userns() {
 #[test_log::test]
 #[ignore = "requires Linux >= 6.9, initial-userns CAP_SYS_ADMIN, user namespaces, and BPF token support"]
 fn token_feature_detection_in_owning_userns() {
-    // The asserted bpf_name probe loads a TracePoint program. TracePoint leaves
-    // expected_attach_type unset, so the kernel checks attach-mask bit zero.
+    // Features implied by a token are reported without any probe, so detection must
+    // succeed whatever the token delegates.
     run_in_token_userns(
         TOKEN_FEATURE_DETECTION.permissions(),
         TOKEN_FEATURE_DETECTION.capabilities,

@@ -600,8 +600,8 @@ fn match_member<'target>(
     let target_id = target_btf.resolve_type(target_id)?;
     let target_ty = target_btf.type_by_id(target_id)?;
 
-    let target_members: Vec<&BtfMember> = match target_ty.members() {
-        Some(members) => members.collect(),
+    let target_members: &[BtfMember] = match target_ty.members() {
+        Some(members) => members,
         // not a fields type, no match
         None => return Ok(None),
     };
@@ -1197,7 +1197,7 @@ impl ComputedRelocation {
         let is_bitfield = bit_size > 0;
         if is_bitfield {
             // find out the smallest int size to load the bitfield
-            byte_size = member_ty.size().unwrap();
+            byte_size = member_ty.size().ok_or(BtfError::InvalidTypeInfo)?;
             byte_off = bit_off / 8 / byte_size * byte_size;
             while bit_off + bit_size - byte_off * 8 > byte_size * 8 {
                 if byte_size >= 8 {

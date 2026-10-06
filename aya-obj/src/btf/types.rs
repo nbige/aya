@@ -345,6 +345,10 @@ pub struct Int {
 }
 
 impl Int {
+    pub const fn size(&self) -> u32 {
+        self.size
+    }
+
     pub(crate) fn to_bytes(&self) -> Vec<u8> {
         let Self {
             name_offset,
@@ -398,11 +402,19 @@ impl Int {
 #[repr(C)]
 #[derive(Debug, Clone)]
 pub struct BtfEnum {
-    pub name_offset: u32,
-    pub value: u32,
+    pub(crate) name_offset: u32,
+    pub(crate) value: u32,
 }
 
 impl BtfEnum {
+    pub const fn name_offset(&self) -> u32 {
+        self.name_offset
+    }
+
+    pub const fn value(&self) -> u32 {
+        self.value
+    }
+
     pub const fn new(name_offset: u32, value: u32) -> Self {
         Self { name_offset, value }
     }
@@ -418,6 +430,10 @@ pub struct Enum {
 }
 
 impl Enum {
+    pub const fn size(&self) -> u32 {
+        self.size
+    }
+
     pub fn variants(&self) -> &[BtfEnum] {
         &self.variants
     }
@@ -514,6 +530,10 @@ pub struct Enum64 {
 }
 
 impl Enum64 {
+    pub const fn size(&self) -> u32 {
+        self.size
+    }
+
     pub fn variants(&self) -> &[BtfEnum64] {
         &self.variants
     }
@@ -615,6 +635,10 @@ pub struct Struct {
 }
 
 impl Struct {
+    pub const fn size(&self) -> u32 {
+        self.size
+    }
+
     pub fn members(&self) -> &[BtfMember] {
         &self.members
     }
@@ -715,6 +739,10 @@ pub struct Union {
 }
 
 impl Union {
+    pub const fn size(&self) -> u32 {
+        self.size
+    }
+
     pub fn members(&self) -> &[BtfMember] {
         &self.members
     }
@@ -879,8 +907,25 @@ impl Array {
 #[repr(C)]
 #[derive(Clone, Debug)]
 pub struct BtfParam {
-    pub name_offset: u32,
-    pub btf_type: u32,
+    pub(crate) name_offset: u32,
+    pub(crate) btf_type: u32,
+}
+
+impl BtfParam {
+    pub const fn new(name_offset: u32, btf_type: u32) -> Self {
+        Self {
+            name_offset,
+            btf_type,
+        }
+    }
+
+    pub const fn name_offset(&self) -> u32 {
+        self.name_offset
+    }
+
+    pub const fn btf_type(&self) -> u32 {
+        self.btf_type
+    }
 }
 
 #[repr(C)]
@@ -1373,7 +1418,12 @@ impl BtfType {
         }
     }
 
-    /// Returns the declared byte size, or the host's native pointer width for pointers.
+    /// Returns the declared byte size.
+    ///
+    /// Returns `None` for kinds without a declared size. This includes pointers, whose width is
+    /// a property of the target rather than of the type; use [`Btf::type_size`] to resolve it.
+    ///
+    /// [`Btf::type_size`]: crate::btf::Btf::type_size
     pub const fn size(&self) -> Option<u32> {
         match self {
             Self::Int(t) => Some(t.size),
@@ -1383,7 +1433,6 @@ impl BtfType {
             Self::Struct(t) => Some(t.size),
             Self::Union(t) => Some(t.size),
             Self::DataSec(t) => Some(t.size),
-            Self::Ptr(_) => Some(size_of::<&()>() as u32),
             _ => None,
         }
     }
@@ -1483,10 +1532,11 @@ impl BtfType {
         matches!(self, Self::Struct(_) | Self::Union(_))
     }
 
-    pub fn members(&self) -> Option<impl Iterator<Item = &BtfMember>> {
+    /// Returns the members of a struct or union.
+    pub fn members(&self) -> Option<&[BtfMember]> {
         match self {
-            Self::Struct(t) => Some(t.members.iter()),
-            Self::Union(t) => Some(t.members.iter()),
+            Self::Struct(t) => Some(t.members()),
+            Self::Union(t) => Some(t.members()),
             _ => None,
         }
     }
@@ -1687,7 +1737,7 @@ mod tests {
             assert_eq!(structure.members().len(), 1);
             assert_eq!(union.members().len(), 1);
             for ty in [BtfType::Struct(structure), BtfType::Union(union)] {
-                let field = ty.members().unwrap().next().unwrap();
+                let field = &ty.members().unwrap()[0];
                 assert_eq!(field.name_offset(), 1);
                 assert_eq!(field.btf_type(), 2);
                 assert_eq!(field.offset(), (7 << 24) | 16);

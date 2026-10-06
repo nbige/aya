@@ -746,7 +746,7 @@ macro_rules! impl_creatable_map {
                 let obj = aya_obj::Map::new_from_params(
                     $map_type as u32, $key_size, $value_size, max_entries, flags,
                 );
-                Self::new(MapData::create(obj, $name, None, None, Default::default())?)
+                Self::new(MapData::create(obj, $name, None)?)
             }
         }
     };
@@ -818,10 +818,30 @@ impl MapData {
         obj: aya_obj::Map,
         name: &str,
         btf_fd: Option<BorrowedFd<'_>>,
-        token_fd: Option<BorrowedFd<'_>>,
-        features: Features,
     ) -> Result<Self, MapError> {
-        Self::create_with_inner_map_fd(obj, name, btf_fd, None, token_fd, features)
+        Self::create_with_inner_map_fd(obj, name, btf_fd, None, None, Features::ambient())
+    }
+
+    /// Creates a new map with the provided `name`, delegating privilege through the given
+    /// [`BpfToken`](crate::token::BpfToken) file descriptor.
+    ///
+    /// The map records the features implied by BPF token support, so that, for example,
+    /// [`CpuMap`](crate::maps::xdp::CpuMap) and [`DevMap`](crate::maps::xdp::DevMap) use the
+    /// value layout the kernel supports.
+    pub fn create_with_token(
+        obj: aya_obj::Map,
+        name: &str,
+        btf_fd: Option<BorrowedFd<'_>>,
+        token_fd: BorrowedFd<'_>,
+    ) -> Result<Self, MapError> {
+        Self::create_with_inner_map_fd(
+            obj,
+            name,
+            btf_fd,
+            None,
+            Some(token_fd),
+            crate::sys::detect_features_with_token(token_fd),
+        )
     }
 
     /// Creates a new map with the provided `name` and optional `inner_map_fd` for map-of-maps types.
@@ -902,10 +922,11 @@ impl MapData {
         } else {
             let inner_map;
             let inner_map_fd = if let Some(inner) = inner_map_obj {
-                inner_map = Self::create(
+                inner_map = Self::create_with_inner_map_fd(
                     inner,
                     &format!("{name}.inner"),
                     btf_fd,
+                    None,
                     token_fd,
                     features.clone(),
                 )?;
@@ -969,12 +990,12 @@ impl MapData {
             io_error,
         })?;
 
-        Self::from_fd_inner(fd, Features::ambient_cached())
+        Self::from_fd_inner(fd, Features::ambient())
     }
 
     /// Loads a map from a map id.
     pub fn from_id(id: u32) -> Result<Self, MapError> {
-        Self::from_id_inner(id, Features::ambient_cached())
+        Self::from_id_inner(id, Features::ambient())
     }
 
     /// Loads a map from a map id, resolving kernel features using the given
@@ -988,8 +1009,7 @@ impl MapData {
     /// determines behavior such as [`CpuMap`](crate::maps::xdp::CpuMap) and
     /// [`DevMap`](crate::maps::xdp::DevMap) prog-id support.
     pub fn from_id_with_token(id: u32, token_fd: BorrowedFd<'_>) -> Result<Self, MapError> {
-        let features = crate::sys::detect_features_with_token(token_fd)?;
-        Self::from_id_inner(id, features)
+        Self::from_id_inner(id, crate::sys::detect_features_with_token(token_fd))
     }
 
     fn from_id_inner(id: u32, features: Features) -> Result<Self, MapError> {
@@ -1013,7 +1033,7 @@ impl MapData {
     /// For example, you received an FD over Unix Domain Socket.
     pub fn from_fd(fd: OwnedFd) -> Result<Self, MapError> {
         let fd = crate::MockableFd::from_fd(fd);
-        Self::from_fd_inner(fd, Features::ambient_cached())
+        Self::from_fd_inner(fd, Features::ambient())
     }
 
     /// Allows the map to be pinned to the provided path.
@@ -1283,7 +1303,7 @@ mod test_utils {
             } => Ok(crate::MockableFd::mock_signed_fd().into()),
             call => panic!("unexpected syscall {call:?}"),
         });
-        MapData::create(obj, "foo", None, None, Default::default()).unwrap()
+        MapData::create(obj, "foo", None).unwrap()
     }
 
     pub(super) fn new_obj_map<K>(map_type: bpf_map_type) -> aya_obj::Map {
@@ -1375,7 +1395,7 @@ mod tests {
                 assert_eq!(fd.as_fd().as_raw_fd(), crate::MockableFd::mock_signed_fd());
                 // `from_id` without a token resolves the ambient (untokenized)
                 // process features, not a fabricated token-derived set.
-                assert_eq!(features, Features::ambient_cached());
+                assert_eq!(features, Features::ambient());
             }
         );
     }
@@ -1395,13 +1415,13 @@ mod tests {
         });
 
         // A features value that deliberately differs from the ambient
-        // `Features::ambient_cached()` default, standing in for a token-scoped
+        // `Features::ambient()` default, standing in for a token-scoped
         // feature set: `MapData::from_id_inner` must stamp the map with
         // exactly the features it was given, never silently substitute the
         // process-ambient set. This is what a caller-supplied BPF token
         // (via `from_id_with_token`) relies on.
         let token_features = Features::new(true, true, true, true, true, true, true, None);
-        assert_ne!(token_features, Features::ambient_cached());
+        assert_ne!(token_features, Features::ambient());
 
         assert_matches!(
             MapData::from_id_inner(1234, token_features.clone()),
@@ -1420,7 +1440,7 @@ mod tests {
         });
 
         assert_matches!(
-            MapData::create(new_obj_map(), "foo", None, None, Default::default()),
+            MapData::create(new_obj_map(), "foo", None),
             Ok(MapData {
                 obj: _,
                 fd,
@@ -1446,7 +1466,7 @@ mod tests {
             MapData::create(test_utils::new_obj_map_with_max_entries::<u32>(
                 bpf_map_type::BPF_MAP_TYPE_PERF_EVENT_ARRAY,
                 65535,
-            ), "foo", None, None, Default::default()),
+            ), "foo", None),
             Ok(MapData {
                 obj,
                 fd,
@@ -1462,7 +1482,7 @@ mod tests {
             MapData::create(test_utils::new_obj_map_with_max_entries::<u32>(
                 bpf_map_type::BPF_MAP_TYPE_PERF_EVENT_ARRAY,
                 0,
-            ), "foo", None, None, Default::default()),
+            ), "foo", None),
             Ok(MapData {
                 obj,
                 fd,
@@ -1478,7 +1498,7 @@ mod tests {
             MapData::create(test_utils::new_obj_map_with_max_entries::<u32>(
                 bpf_map_type::BPF_MAP_TYPE_PERF_EVENT_ARRAY,
                 1,
-            ), "foo", None, None, Default::default()),
+            ), "foo", None),
             Ok(MapData {
                 obj,
                 fd,
@@ -1521,8 +1541,7 @@ mod tests {
             _ => Err((-1, io::Error::from_raw_os_error(EFAULT))),
         });
 
-        let map_data =
-            MapData::create(new_obj_map(), TEST_NAME, None, None, Default::default()).unwrap();
+        let map_data = MapData::create(new_obj_map(), TEST_NAME, None).unwrap();
         assert_eq!(TEST_NAME, map_data.info().unwrap().name_as_str().unwrap());
     }
 
@@ -1601,7 +1620,7 @@ mod tests {
         override_syscall(|_| Err((-1, io::Error::from_raw_os_error(EFAULT))));
 
         assert_matches!(
-            MapData::create(new_obj_map(), "foo", None, None, Default::default()),
+            MapData::create(new_obj_map(), "foo", None),
             Err(MapError::CreateError { name, io_error }) => {
                 assert_eq!(name, "foo");
                 assert_eq!(io_error.raw_os_error(), Some(EFAULT));

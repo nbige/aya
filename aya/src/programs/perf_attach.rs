@@ -90,9 +90,6 @@ pub(crate) fn perf_attach(
     cookie: Option<u64>,
     features: &Features,
 ) -> Result<PerfLinkInner, ProgramError> {
-    if cookie.is_some() && (!features.bpf_cookie() || !features.bpf_perf_link()) {
-        return Err(ProgramError::AttachCookieNotSupported);
-    }
     if features.bpf_perf_link() {
         attach_bpf_link(prog_fd, perf_fd, cookie, features).map(PerfLinkInner::Fd)
     } else {

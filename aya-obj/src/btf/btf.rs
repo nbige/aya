@@ -115,6 +115,13 @@ pub enum BtfError {
         type_name: String,
     },
 
+    /// the size of a BTF type does not fit in `usize`
+    #[error("size of BTF type `{type_id}` overflows")]
+    TypeSizeOverflow {
+        /// type id
+        type_id: u32,
+    },
+
     /// maximum depth reached resolving BTF type
     #[error("maximum depth reached resolving BTF type")]
     MaximumTypeDepthReached {
@@ -238,6 +245,8 @@ pub struct Btf {
     header: btf_header,
     strings: Vec<u8>,
     types: BtfTypes,
+    /// Pointer width in bytes, inferred from the `long` type if the BTF defines one.
+    pointer_size: Option<u32>,
     _endianness: Endianness,
     /// Extern symbols parsed from the `.ksyms` section.
     pub(crate) externs: ExternCollection,
@@ -268,6 +277,7 @@ impl Btf {
             },
             strings: vec![0],
             types: BtfTypes::default(),
+            pointer_size: None,
             _endianness: Endianness::default(),
             externs: ExternCollection::new(),
         }
@@ -279,6 +289,11 @@ impl Btf {
     }
 
     /// Returns types in type ID order, including the void type at ID zero.
+    ///
+    /// This reflects the current state of the BTF. After
+    /// [`Object::fixup_and_sanitize_btf`] it contains the sanitized types, which may differ from
+    /// the original metadata: for example `Enum64` rewritten as `Union`, `Func` linkage forced to
+    /// static, and `DataSec`/`Var` fix-ups.
     pub fn types(&self) -> impl Iterator<Item = &BtfType> {
         self.types.types.iter()
     }
@@ -294,7 +309,29 @@ impl Btf {
 
     /// Adds a type to BTF metadata, returning a type id
     pub fn add_type(&mut self, btf_type: BtfType) -> u32 {
-        add_type(&mut self.header, &mut self.types, btf_type)
+        let pointer_size = self
+            .pointer_size
+            .is_none()
+            .then(|| self.long_size(&btf_type));
+        let type_id = add_type(&mut self.header, &mut self.types, btf_type);
+        if let Some(pointer_size) = pointer_size {
+            self.pointer_size = pointer_size;
+        }
+        type_id
+    }
+
+    /// Returns the width of `ty` if it is the C `long` type, which is as wide as a pointer on
+    /// every target supported by the kernel (ILP32 and LP64).
+    fn long_size(&self, ty: &BtfType) -> Option<u32> {
+        let BtfType::Int(int) = ty else { return None };
+        let size = int.size();
+        if !matches!(size, 4 | 8) {
+            return None;
+        }
+        match &*self.type_name(ty).ok()? {
+            "long" | "unsigned long" | "long int" | "long unsigned int" => Some(size),
+            _ => None,
+        }
     }
 
     /// Loads BTF metadata from `/sys/kernel/btf/vmlinux`.
@@ -318,7 +355,12 @@ impl Btf {
         )
     }
 
-    /// Parses BTF from binary data of the given endianness
+    /// Parses BTF from binary data of the given endianness.
+    ///
+    /// Only standalone BTF is supported: type IDs start at zero and string offsets refer to this
+    /// BTF's own string section. Split BTF, such as kernel module BTF in
+    /// `/sys/kernel/btf/<module>`, refers to a base BTF for both and cannot be told apart from
+    /// standalone BTF by its contents, so its type IDs and names will be resolved incorrectly.
     pub fn parse(data: &[u8], endianness: Endianness) -> Result<Self, BtfError> {
         if data.len() < size_of::<btf_header>() {
             return Err(BtfError::InvalidHeader);
@@ -336,13 +378,17 @@ impl Btf {
         let strings = data[str_off..str_off + str_len].to_vec();
         let types = Self::read_type_info(&header, data, endianness)?;
 
-        Ok(Self {
+        let mut btf = Self {
             header,
             strings,
             types,
+            pointer_size: None,
             _endianness: endianness,
             externs: ExternCollection::new(),
-        })
+        };
+        let pointer_size = btf.types().find_map(|ty| btf.long_size(ty));
+        btf.pointer_size = pointer_size;
+        Ok(btf)
     }
 
     fn read_type_info(
@@ -422,21 +468,31 @@ impl Btf {
 
     /// Returns the resolved size in bytes, including array elements.
     ///
-    /// Pointer sizes use the native pointer width of the host running this code.
+    /// The element counts of nested arrays are multiplied together. The size of a pointer is
+    /// inferred from the BTF's `long` type, falling back to the native pointer width of the host
+    /// running this code if the BTF does not define one.
     pub fn type_size(&self, root_type_id: u32) -> Result<usize, BtfError> {
+        let overflow = || BtfError::TypeSizeOverflow {
+            type_id: root_type_id,
+        };
         let mut type_id = root_type_id;
-        let mut n_elems = 1;
+        let mut n_elems: usize = 1;
         for () in core::iter::repeat_n((), MAX_RESOLVE_DEPTH) {
             let ty = self.types.type_by_id(type_id)?;
             let size = match ty {
                 BtfType::Array(Array { array, .. }) => {
-                    n_elems = array.len;
+                    n_elems = n_elems
+                        .checked_mul(array.len as usize)
+                        .ok_or_else(overflow)?;
                     type_id = array.element_type;
                     continue;
                 }
+                BtfType::Ptr(_) => self
+                    .pointer_size
+                    .map_or(size_of::<&()>(), |size| size as usize),
                 other => {
                     if let Some(size) = other.size() {
-                        size
+                        size as usize
                     } else if let Some(next) = other.btf_type() {
                         type_id = next;
                         continue;
@@ -445,7 +501,7 @@ impl Btf {
                     }
                 }
             };
-            return Ok((size * n_elems) as usize);
+            return size.checked_mul(n_elems).ok_or_else(overflow);
         }
 
         Err(BtfError::MaximumTypeDepthReached {
@@ -1413,6 +1469,62 @@ mod tests {
             assert_eq!(ty.proto(), proto);
             assert_eq!(ty.linkage(), FuncLinkage::Global);
         });
+    }
+
+    #[test]
+    fn type_size_multiplies_nested_array_lengths() {
+        let mut btf = Btf::new();
+        let scalar = btf.add_type(BtfType::Int(Int::new(0, 4, IntEncoding::Signed, 0)));
+        // int a[2][3][5]
+        let inner = btf.add_type(BtfType::Array(Array::new(0, scalar, scalar, 5)));
+        let middle = btf.add_type(BtfType::Array(Array::new(0, inner, scalar, 3)));
+        let outer = btf.add_type(BtfType::Array(Array::new(0, middle, scalar, 2)));
+        assert_eq!(btf.type_size(inner).unwrap(), 20);
+        assert_eq!(btf.type_size(middle).unwrap(), 60);
+        assert_eq!(btf.type_size(outer).unwrap(), 120);
+    }
+
+    #[test]
+    fn type_size_rejects_overflow() {
+        let mut btf = Btf::new();
+        let wide = btf.add_type(BtfType::Int(Int::new(0, 8, IntEncoding::None, 0)));
+        let huge = btf.add_type(BtfType::Array(Array::new(0, wide, wide, u32::MAX)));
+        let huger = btf.add_type(BtfType::Array(Array::new(0, huge, wide, u32::MAX)));
+        let hugest = btf.add_type(BtfType::Array(Array::new(0, huger, wide, u32::MAX)));
+        let hugester = btf.add_type(BtfType::Array(Array::new(0, hugest, wide, u32::MAX)));
+        // 8 * u32::MAX fits in a 64-bit usize, but the nested lengths do not.
+        assert_matches!(
+            btf.type_size(hugester),
+            Err(BtfError::TypeSizeOverflow { type_id }) => assert_eq!(type_id, hugester)
+        );
+    }
+
+    #[test]
+    fn type_size_infers_pointer_size_from_btf() {
+        for (name, size) in [("long", 8), ("long unsigned int", 4), ("unsigned long", 8)] {
+            let mut btf = Btf::new();
+            let name = btf.add_string(name);
+            btf.add_type(BtfType::Int(Int::new(name, size, IntEncoding::None, 0)));
+            let target = btf.add_type(BtfType::Int(Int::new(0, 1, IntEncoding::None, 0)));
+            let ptr = btf.add_type(BtfType::Ptr(Ptr::new(0, target)));
+            let array = btf.add_type(BtfType::Array(Array::new(0, ptr, target, 3)));
+            let parsed = Btf::parse(&btf.to_bytes(), Endianness::default()).unwrap();
+            for btf in [&btf, &parsed] {
+                assert_eq!(btf.type_size(ptr).unwrap(), size as usize);
+                assert_eq!(btf.type_size(array).unwrap(), 3 * size as usize);
+            }
+        }
+    }
+
+    #[test]
+    fn type_size_pointer_falls_back_to_host_width() {
+        let mut btf = Btf::new();
+        // A 2-byte `long` and a wrongly sized one are not pointer-sized.
+        let name = btf.add_string("long");
+        btf.add_type(BtfType::Int(Int::new(name, 2, IntEncoding::None, 0)));
+        let target = btf.add_type(BtfType::Int(Int::new(0, 1, IntEncoding::None, 0)));
+        let ptr = btf.add_type(BtfType::Ptr(Ptr::new(0, target)));
+        assert_eq!(btf.type_size(ptr).unwrap(), size_of::<&()>());
     }
 
     fn supports<const N: usize>(supported: [BtfFeature; N]) -> impl Fn(BtfFeature) -> bool {
