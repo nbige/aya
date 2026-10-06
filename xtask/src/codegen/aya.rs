@@ -63,6 +63,7 @@ fn codegen_bindings(opts: &SysrootOptions, libbpf_dir: &Path) -> Result<()> {
             // BPF
             "bpf_cmd",
             "bpf_insn",
+            "bpf_insn_array_value",
             "bpf_attr",
             "bpf_map_type",
             "bpf_prog_type",
@@ -102,6 +103,7 @@ fn codegen_bindings(opts: &SysrootOptions, libbpf_dir: &Path) -> Result<()> {
             "perf_hw_cache_id",
             "perf_hw_cache_op_id",
             "perf_hw_cache_op_result_id",
+            "perf_event_read_format",
             "perf_event_sample_format",
             "perf_event_mmap_page",
             "perf_event_header",

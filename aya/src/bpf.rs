@@ -38,8 +38,9 @@ mod token_loader_tests;
 ///
 /// # Safety
 ///
-/// This trait is unsafe because it allows for the conversion of types to and
-/// from byte slices.
+/// Every sequence of initialized bytes of the appropriate size must represent
+/// a valid value of the type. The type must not contain padding or uninitialized
+/// bytes.
 pub unsafe trait Pod: Copy + 'static {}
 
 macro_rules! unsafe_impl_pod {
@@ -692,8 +693,8 @@ impl<'a> EbpfLoader<'a> {
 
         // The kernel requires inner_map_fd when creating map-of-maps, so inner
         // maps must be created first. Partition into regular maps and map-of-maps.
-        let mut regular_maps: Vec<(String, aya_obj::Map)> = Vec::new();
-        let mut maps_of_maps: Vec<(String, aya_obj::Map)> = Vec::new();
+        let mut regular_maps: Vec<(String, aya_obj::Map, bpf_map_type)> = Vec::new();
+        let mut maps_of_maps: Vec<(String, aya_obj::Map, bpf_map_type)> = Vec::new();
 
         for (name, map_obj) in obj.maps.drain() {
             if let (false, EbpfSectionKind::Bss | EbpfSectionKind::Data | EbpfSectionKind::Rodata) =
@@ -701,54 +702,58 @@ impl<'a> EbpfLoader<'a> {
             {
                 continue;
             }
-            let map_type: bpf_map_type = map_obj.map_type().try_into().map_err(MapError::from)?;
+            let map_type = map_obj.map_type().try_into().map_err(MapError::from)?;
             if is_map_of_maps(map_type) {
-                maps_of_maps.push((name, map_obj));
+                &mut maps_of_maps
             } else {
-                regular_maps.push((name, map_obj));
+                &mut regular_maps
             }
+            .push((name, map_obj, map_type));
         }
 
         let mut maps: HashMap<String, MapData> = HashMap::new();
 
         // Regular maps first, so they're available as inner maps below.
-        for ((name, mut map_obj), is_map_of_maps) in regular_maps
-            .into_iter()
-            .zip(iter::repeat(false))
-            .chain(maps_of_maps.into_iter().zip(iter::repeat(true)))
-        {
+        for (name, mut map_obj, map_type) in regular_maps.into_iter().chain(maps_of_maps) {
             let num_cpus = || {
-                Ok(nr_cpus().map_err(|(path, error)| EbpfError::FileError {
+                let num_cpus = nr_cpus().map_err(|(path, error)| EbpfError::FileError {
                     path: PathBuf::from(path),
                     error,
-                })? as u32)
+                })?;
+                Ok(num_cpus as u32)
             };
-            let map_type: bpf_map_type = map_obj.map_type().try_into().map_err(MapError::from)?;
-            if let Some(max_entries_val) = max_entries_override(
+            let max_entries_val = max_entries_override(
                 map_type,
                 max_entries.get(name.as_str()).copied(),
                 || map_obj.max_entries(),
                 num_cpus,
                 || page_size() as u32,
-            )? {
+            )?;
+            if let Some(max_entries_val) = max_entries_val {
                 map_obj.set_max_entries(max_entries_val)
             }
-            if let Some(value_size) = value_size_override(map_type, &features) {
-                map_obj.set_value_size(value_size)
-            }
-
             let btf_fd = btf_fd.as_deref().map(|fd| fd.as_fd());
 
             // Defer inner map creation to avoid a BPF_MAP_CREATE when the outer map is already pinned.
-            let inner_map_obj = if is_map_of_maps {
-                Some(map_obj.inner().ok_or_else(|| {
+            let mut inner_map = if is_map_of_maps(map_type) {
+                let map_obj = map_obj.inner().ok_or_else(|| {
                     EbpfError::MapError(MapError::MissingInnerMapDefinition {
                         outer_name: name.clone(),
                     })
-                })?)
+                })?;
+                let map_type = map_obj.map_type().try_into().map_err(MapError::from)?;
+                Some((map_obj, map_type))
             } else {
                 None
             };
+            for (map_obj, map_type) in
+                iter::once((&mut map_obj, map_type)).chain(inner_map.as_mut().map(|(m, t)| (m, *t)))
+            {
+                if let Some(value_size) = value_size_override(map_type, &features) {
+                    map_obj.set_value_size(value_size);
+                }
+            }
+            let inner_map_obj = inner_map.map(|(m, _)| m);
             let mut map = if let Some(pin_path) = map_pin_path_by_name.get(name.as_str()) {
                 MapData::create_pinned_by_name(
                     pin_path,
@@ -763,9 +768,9 @@ impl<'a> EbpfLoader<'a> {
                 match map_obj.pinning() {
                     PinningType::None => {
                         let btf_inner_map;
-                        let inner_map_fd = if let Some(inner) = inner_map_obj {
+                        let inner_map_fd = if let Some(inner_map_obj) = inner_map_obj {
                             btf_inner_map = MapData::create_with_inner_map_fd(
-                                inner,
+                                inner_map_obj,
                                 &format!("{name}.inner"),
                                 btf_fd,
                                 None,
@@ -787,7 +792,7 @@ impl<'a> EbpfLoader<'a> {
                     }
                     PinningType::ByName => {
                         // pin maps in /sys/fs/bpf by default to align with libbpf
-                        // behavior https://github.com/libbpf/libbpf/blob/v1.2.2/src/libbpf.c#L2161.
+                        // behavior https://github.com/libbpf/libbpf/blob/1728e3e4b/src/libbpf.c#L2161.
                         let path = default_map_pin_directory
                             .as_deref()
                             .unwrap_or_else(|| Path::new("/sys/fs/bpf"));
@@ -1122,7 +1127,7 @@ fn value_size_override(map_type: bpf_map_type, features: &Features) -> Option<u3
 // Adjusts the byte size of a RingBuf map to match a power-of-two multiple of the page size.
 //
 // This mirrors the logic used by libbpf.
-// See https://github.com/libbpf/libbpf/blob/ec6f716eda43/src/libbpf.c#L2461-L2463
+// See https://github.com/libbpf/libbpf/blob/ec6f716ed/src/libbpf.c#L2461-L2463
 const fn adjust_to_page_size(byte_size: u32, page_size: u32) -> u32 {
     // If the byte_size is zero, return zero and let the verifier reject the map
     // when it is loaded. This is the behavior of libbpf.

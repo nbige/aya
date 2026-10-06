@@ -208,14 +208,14 @@ mod tests {
             IOCTL_COUNT.set(0);
             override_syscall(|call| match call {
                 Syscall::PerfEventIoctl {
-                    request: PerfEventIoctlRequest::SetBpf(_) | PerfEventIoctlRequest::Enable,
+                    request: PerfEventIoctlRequest::SetBpf(_) | PerfEventIoctlRequest::Enable { .. },
                     ..
                 } => {
                     IOCTL_COUNT.set(IOCTL_COUNT.get() + 1);
                     Ok(0)
                 }
                 Syscall::PerfEventIoctl {
-                    request: PerfEventIoctlRequest::Disable,
+                    request: PerfEventIoctlRequest::Disable { .. },
                     ..
                 } => Ok(0),
                 call => panic!("unexpected syscall: {call:?}"),

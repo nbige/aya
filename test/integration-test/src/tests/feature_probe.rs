@@ -8,8 +8,8 @@ use aya::{
     maps::MapType,
     programs::{LsmAttachType, ProgramError, ProgramType},
     sys::{
-        BpfHelper, BtfFeature, is_btf_feature_supported, is_helper_supported, is_map_supported,
-        is_program_supported,
+        BpfHelper, BtfFeature, UProbeMultiFeature, is_btf_feature_supported, is_helper_supported,
+        is_map_supported, is_program_supported, is_uprobe_multi_supported,
     },
     test_helpers::kernel_assert,
     util::KernelVersion,
@@ -22,6 +22,60 @@ fn probe_empty_btf_datasec() {
         is_btf_feature_supported(BtfFeature::DataSecZero).unwrap(),
         KernelVersion::new(5, 12, 0),
     );
+}
+
+#[test_log::test]
+fn probe_uprobe_multi() {
+    let current = KernelVersion::current().unwrap();
+    let link_creation = is_uprobe_multi_supported(UProbeMultiFeature::LinkCreation).unwrap();
+    let process_scoped_pid_filter =
+        is_uprobe_multi_supported(UProbeMultiFeature::ProcessScopedPidFilter).unwrap();
+
+    assert!(
+        !process_scoped_pid_filter || link_creation,
+        "process-scoped PID filtering requires multi-uprobe link support"
+    );
+
+    // Multi-uprobe requires a 64-bit kernel, even when CONFIG_UPROBES=y.
+    // https://github.com/torvalds/linux/blob/7d0a66e4b/kernel/trace/bpf_trace.c#L3168-L3170
+    let kernel_config = kernel_config().unwrap();
+    if !["CONFIG_UPROBES", "CONFIG_64BIT"]
+        .into_iter()
+        .all(|key| matches!(kernel_config.get(key), Some(procfs::ConfigSetting::Yes)))
+    {
+        assert!(
+            !link_creation,
+            "multi-uprobe links require CONFIG_UPROBES=y and CONFIG_64BIT=y"
+        );
+        assert!(
+            !process_scoped_pid_filter,
+            "multi-uprobe PID filtering requires CONFIG_UPROBES=y and CONFIG_64BIT=y"
+        );
+        return;
+    }
+
+    // Use known upstream version boundaries as an oracle for the probe results.
+    if current < KernelVersion::new(6, 6, 0) {
+        assert!(!link_creation, "multi-uprobe predates kernel {current}");
+        assert!(
+            !process_scoped_pid_filter,
+            "multi-uprobe PID filtering predates kernel {current}"
+        );
+    } else {
+        assert!(
+            link_creation,
+            "kernel {current} includes multi-uprobe links"
+        );
+    }
+
+    if current >= KernelVersion::new(6, 10, 0) {
+        // Linux 6.10 includes process-scoped PID filtering. The fix was also backported to some
+        // stable kernels, so versions between 6.6 and 6.10 cannot be classified by version alone.
+        assert!(
+            process_scoped_pid_filter,
+            "kernel {current} includes process-scoped multi-uprobe PID filtering"
+        );
+    }
 }
 
 #[test_log::test]
@@ -116,8 +170,8 @@ fn probe_supported_programs() {
     // `is_program_supported` checks attach support through `BPF_RAW_TRACEPOINT_OPEN`;
     // tracing and LSM programs go through `bpf_tracing_prog_attach()`, which links a
     // BPF trampoline. On arm64 kernels before 6.4 this can fail with `-ENOTSUPP`.
-    // https://github.com/torvalds/linux/blob/v6.3/kernel/bpf/syscall.c#L3319-L3333
-    // https://github.com/torvalds/linux/blob/v6.3/kernel/bpf/trampoline.c#L234-L237
+    // https://github.com/torvalds/linux/blob/457391b03/kernel/bpf/syscall.c#L3319-L3333
+    // https://github.com/torvalds/linux/blob/457391b03/kernel/bpf/trampoline.c#L234-L237
     let kern_version = if cfg!(target_arch = "aarch64") {
         KernelVersion::new(6, 4, 0)
     } else {
@@ -1262,7 +1316,7 @@ fn probe_supported_helpers() {
     );
     // bpf_skb_output and bpf_xdp_output are exposed through BPF_PROG_TYPE_TRACING,
     // not legacy BPF_PROG_TYPE_RAW_TRACEPOINT:
-    // https://github.com/torvalds/linux/blob/v6.14/kernel/trace/bpf_trace.c#L1981-L1991
+    // https://github.com/torvalds/linux/blob/38fec10eb/kernel/trace/bpf_trace.c#L1981-L1991
     assert_helper_probe_unsupported!(
         ProgramType::Tracing,
         BpfHelper::BPF_FUNC_skb_output // >= v5.5
@@ -1419,4 +1473,7 @@ fn probe_supported_maps() {
 
     let kern_version = KernelVersion::new(6, 9, 0);
     kernel_assert!(is_supported!(MapType::Arena), kern_version);
+
+    let kern_version = KernelVersion::new(6, 19, 0);
+    kernel_assert!(is_supported!(MapType::InsnArray), kern_version);
 }

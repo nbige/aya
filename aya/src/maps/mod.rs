@@ -488,6 +488,7 @@ impl Map {
             bpf_map_type::BPF_MAP_TYPE_USER_RINGBUF => Self::Unsupported(map_data),
             bpf_map_type::BPF_MAP_TYPE_CGRP_STORAGE => Self::CgrpStorage(map_data),
             bpf_map_type::BPF_MAP_TYPE_ARENA => Self::Unsupported(map_data),
+            bpf_map_type::BPF_MAP_TYPE_INSN_ARRAY => Self::Unsupported(map_data),
             bpf_map_type::BPF_MAP_TYPE_PERCPU_CGROUP_STORAGE_DEPRECATED => {
                 Self::PerCpuCgroupStorage(map_data)
             }
@@ -739,12 +740,24 @@ impl sealed::InnerMap for MapFd {
 }
 
 macro_rules! impl_creatable_map {
-    ($ty:ident<MapData $(, $p:ident: Pod)*>, $map_type:expr, $key_size:expr, $value_size:expr, $name:expr) => {
+    (
+        $ty:ident<MapData $(, $p:ident: Pod)*>,
+        $map_type:expr,
+        $key_size:expr,
+        $value_size:expr,
+        $capacity:ident,
+        $name:expr
+        $(, $doc:literal)?
+    ) => {
         impl<$($p: Pod),*> $ty<MapData, $($p),*> {
-            /// Creates a standalone map with the given `max_entries` capacity and `flags`.
-            pub fn create(max_entries: u32, flags: u32) -> Result<Self, MapError> {
+            /// Creates a standalone map with the given capacity and `flags`.
+            $(
+                #[doc = ""]
+                #[doc = $doc]
+            )?
+            pub fn create($capacity: u32, flags: u32) -> Result<Self, MapError> {
                 let obj = aya_obj::Map::new_from_params(
-                    $map_type as u32, $key_size, $value_size, max_entries, flags,
+                    $map_type as u32, $key_size, $value_size, $capacity, flags,
                 );
                 Self::new(MapData::create(obj, $name, None)?)
             }
@@ -753,21 +766,30 @@ macro_rules! impl_creatable_map {
 }
 
 impl_creatable_map!(Array<MapData, V: Pod>,
-    bpf_map_type::BPF_MAP_TYPE_ARRAY, size_of::<u32>() as u32, size_of::<V>() as u32, "standalone_array");
+    bpf_map_type::BPF_MAP_TYPE_ARRAY, size_of::<u32>() as u32, size_of::<V>() as u32, max_entries, "standalone_array");
 impl_creatable_map!(PerCpuArray<MapData, V: Pod>,
-    bpf_map_type::BPF_MAP_TYPE_PERCPU_ARRAY, size_of::<u32>() as u32, size_of::<V>() as u32, "standalone_percpu_array");
+    bpf_map_type::BPF_MAP_TYPE_PERCPU_ARRAY, size_of::<u32>() as u32, size_of::<V>() as u32, max_entries, "standalone_percpu_array");
 impl_creatable_map!(BloomFilter<MapData, V: Pod>,
-    bpf_map_type::BPF_MAP_TYPE_BLOOM_FILTER, 0, size_of::<V>() as u32, "standalone_bloom_filter");
+    bpf_map_type::BPF_MAP_TYPE_BLOOM_FILTER, 0, size_of::<V>() as u32, max_entries, "standalone_bloom_filter");
 impl_creatable_map!(Queue<MapData, V: Pod>,
-    bpf_map_type::BPF_MAP_TYPE_QUEUE, 0, size_of::<V>() as u32, "standalone_queue");
+    bpf_map_type::BPF_MAP_TYPE_QUEUE, 0, size_of::<V>() as u32, max_entries, "standalone_queue");
 impl_creatable_map!(Stack<MapData, V: Pod>,
-    bpf_map_type::BPF_MAP_TYPE_STACK, 0, size_of::<V>() as u32, "standalone_stack");
+    bpf_map_type::BPF_MAP_TYPE_STACK, 0, size_of::<V>() as u32, max_entries, "standalone_stack");
 impl_creatable_map!(HashMap<MapData, K: Pod, V: Pod>,
-    bpf_map_type::BPF_MAP_TYPE_HASH, size_of::<K>() as u32, size_of::<V>() as u32, "standalone_hash");
+    bpf_map_type::BPF_MAP_TYPE_HASH, size_of::<K>() as u32, size_of::<V>() as u32, max_entries, "standalone_hash");
 impl_creatable_map!(PerCpuHashMap<MapData, K: Pod, V: Pod>,
-    bpf_map_type::BPF_MAP_TYPE_PERCPU_HASH, size_of::<K>() as u32, size_of::<V>() as u32, "standalone_percpu_hash");
+    bpf_map_type::BPF_MAP_TYPE_PERCPU_HASH, size_of::<K>() as u32, size_of::<V>() as u32, max_entries, "standalone_percpu_hash");
 impl_creatable_map!(LpmTrie<MapData, K: Pod, V: Pod>,
-    bpf_map_type::BPF_MAP_TYPE_LPM_TRIE, size_of::<lpm_trie::Key<K>>() as u32, size_of::<V>() as u32, "standalone_lpm_trie");
+    bpf_map_type::BPF_MAP_TYPE_LPM_TRIE, size_of::<lpm_trie::Key<K>>() as u32, size_of::<V>() as u32, max_entries, "standalone_lpm_trie");
+impl_creatable_map!(
+    RingBuf<MapData>,
+    bpf_map_type::BPF_MAP_TYPE_RINGBUF,
+    0,
+    0,
+    byte_size,
+    "standalone_ring_buf",
+    "`byte_size` must be non-zero, a power of two, and a multiple of the system page size."
+);
 
 pub(crate) const fn check_bounds(map: &MapData, index: u32) -> Result<(), MapError> {
     let max_entries = map.obj.max_entries();
@@ -856,22 +878,16 @@ impl MapData {
         let c_name = CString::new(name)
             .map_err(|std::ffi::NulError { .. }| MapError::InvalidName { name: name.into() })?;
 
-        // BPF_MAP_TYPE_PERF_EVENT_ARRAY's max_entries should not exceed the number of
-        // CPUs.
-        //
         // By default, the newest versions of Aya, libbpf and cilium/ebpf define `max_entries` of
         // `PerfEventArray` as `0`, with an intention to get it replaced with a correct value
         // by the loader.
         //
-        // We allow custom values (potentially coming either from older versions of aya-ebpf or
-        // programs written in C) as long as they don't exceed the number of CPUs.
-        //
-        // Otherwise, when the value is `0` or too large, we set it to the number of CPUs.
-        if obj.map_type() == bpf_map_type::BPF_MAP_TYPE_PERF_EVENT_ARRAY as u32 {
+        // When the value is `0`, we set it to the number of CPUs.
+        if obj.map_type() == bpf_map_type::BPF_MAP_TYPE_PERF_EVENT_ARRAY as u32
+            && obj.max_entries() == 0
+        {
             let nr_cpus = nr_cpus().map_err(|(_, error)| MapError::IoError(error))? as u32;
-            if obj.max_entries() == 0 || obj.max_entries() > nr_cpus {
-                obj.set_max_entries(nr_cpus);
-            }
+            obj.set_max_entries(nr_cpus);
         }
 
         let fd =
@@ -1459,25 +1475,8 @@ mod tests {
             _ => Err((-1, io::Error::from_raw_os_error(EFAULT))),
         });
 
-        let nr_cpus = nr_cpus().unwrap();
-
-        // Create with max_entries > nr_cpus is clamped to nr_cpus
-        assert_matches!(
-            MapData::create(test_utils::new_obj_map_with_max_entries::<u32>(
-                bpf_map_type::BPF_MAP_TYPE_PERF_EVENT_ARRAY,
-                65535,
-            ), "foo", None),
-            Ok(MapData {
-                obj,
-                fd,
-                ..
-            }) => {
-                assert_eq!(fd.as_fd().as_raw_fd(), crate::MockableFd::mock_signed_fd());
-                assert_eq!(obj.max_entries(), nr_cpus as u32)
-            }
-        );
-
         // Create with max_entries = 0 is set to nr_cpus
+        let nr_cpus = nr_cpus().unwrap() as u32;
         assert_matches!(
             MapData::create(test_utils::new_obj_map_with_max_entries::<u32>(
                 bpf_map_type::BPF_MAP_TYPE_PERF_EVENT_ARRAY,
@@ -1489,15 +1488,15 @@ mod tests {
                 ..
             }) => {
                 assert_eq!(fd.as_fd().as_raw_fd(), crate::MockableFd::mock_signed_fd());
-                assert_eq!(obj.max_entries(), nr_cpus as u32)
+                assert_eq!(obj.max_entries(), nr_cpus)
             }
         );
 
-        // Create with max_entries < nr_cpus is unchanged
+        // Non-zero values are preserved.
         assert_matches!(
             MapData::create(test_utils::new_obj_map_with_max_entries::<u32>(
                 bpf_map_type::BPF_MAP_TYPE_PERF_EVENT_ARRAY,
-                1,
+                nr_cpus + 1,
             ), "foo", None),
             Ok(MapData {
                 obj,
@@ -1505,7 +1504,7 @@ mod tests {
                 ..
             }) => {
                 assert_eq!(fd.as_fd().as_raw_fd(), crate::MockableFd::mock_signed_fd());
-                assert_eq!(obj.max_entries(), 1)
+                assert_eq!(obj.max_entries(), nr_cpus + 1)
             }
         );
     }
@@ -1529,12 +1528,12 @@ mod tests {
                 );
                 unsafe {
                     let name_bytes = std::mem::transmute::<&[u8], &[c_char]>(TEST_NAME.as_bytes());
-                    let map_info = attr.info.info as *mut bpf_map_info;
-                    map_info.write({
-                        let mut map_info = map_info.read();
-                        map_info.name[..name_bytes.len()].copy_from_slice(name_bytes);
-                        map_info
-                    })
+                    let info_addr = attr.info.info;
+                    let p = info_addr as *mut bpf_map_info;
+                    // Reborrow mutably so Miri checks the output pointer's write permission.
+                    // Casting to *mut alone does not grant that permission.
+                    let map_info = &mut *p;
+                    map_info.name[..name_bytes.len()].copy_from_slice(name_bytes);
                 }
                 Ok(0)
             }

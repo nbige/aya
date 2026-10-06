@@ -191,6 +191,9 @@ pub enum LinkType {
     /// A Netkit link type.
     #[doc(alias = "BPF_LINK_TYPE_NETKIT")]
     Netkit = bpf_link_type::BPF_LINK_TYPE_NETKIT as isize,
+    /// A socket map link type.
+    #[doc(alias = "BPF_LINK_TYPE_SOCKMAP")]
+    SockMap = bpf_link_type::BPF_LINK_TYPE_SOCKMAP as isize,
 }
 
 impl TryFrom<bpf_link_type> for LinkType {
@@ -212,6 +215,7 @@ impl TryFrom<bpf_link_type> for LinkType {
             bpf_link_type::BPF_LINK_TYPE_TCX => Ok(Self::Tcx),
             bpf_link_type::BPF_LINK_TYPE_UPROBE_MULTI => Ok(Self::UProbeMulti),
             bpf_link_type::BPF_LINK_TYPE_NETKIT => Ok(Self::Netkit),
+            bpf_link_type::BPF_LINK_TYPE_SOCKMAP => Ok(Self::SockMap),
             bpf_link_type::__MAX_BPF_LINK_TYPE => Err(LinkError::UnknownLinkType(link_type as u32)),
         }
     }
@@ -579,10 +583,14 @@ macro_rules! impl_try_into_fdlink {
             type Error = $crate::programs::LinkError;
 
             fn try_from(value: $wrapper) -> Result<Self, Self::Error> {
-                if let $inner::Fd(fd) = value.into_inner() {
-                    Ok(fd)
-                } else {
-                    Err($crate::programs::LinkError::InvalidLink)
+                match value.into_inner() {
+                    $inner::Fd(fd) => Ok(fd),
+                    inner => {
+                        // FdLink and PerfLink clean up on drop. Other links, such as ProgAttachLink
+                        // and NlLink, need an explicit detach(), which the wrapper's Drop calls.
+                        drop($wrapper::new(inner));
+                        Err($crate::programs::LinkError::InvalidLink)
+                    }
                 }
             }
         }
@@ -635,7 +643,7 @@ pub(crate) enum LinkRef {
 }
 
 bitflags::bitflags! {
-    /// Flags which are use to build a set of MprogOptions.
+    /// Flags used to build a [`LinkOrder`].
     #[derive(Clone, Copy, Debug, Default)]
     pub(crate) struct MprogFlags: u32 {
         const REPLACE = BPF_F_REPLACE;

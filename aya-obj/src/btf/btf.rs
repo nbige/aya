@@ -115,13 +115,6 @@ pub enum BtfError {
         type_name: String,
     },
 
-    /// the size of a BTF type does not fit in `usize`
-    #[error("size of BTF type `{type_id}` overflows")]
-    TypeSizeOverflow {
-        /// type id
-        type_id: u32,
-    },
-
     /// maximum depth reached resolving BTF type
     #[error("maximum depth reached resolving BTF type")]
     MaximumTypeDepthReached {
@@ -472,9 +465,6 @@ impl Btf {
     /// inferred from the BTF's `long` type, falling back to the native pointer width of the host
     /// running this code if the BTF does not define one.
     pub fn type_size(&self, root_type_id: u32) -> Result<usize, BtfError> {
-        let overflow = || BtfError::TypeSizeOverflow {
-            type_id: root_type_id,
-        };
         let mut type_id = root_type_id;
         let mut n_elems: usize = 1;
         for () in core::iter::repeat_n((), MAX_RESOLVE_DEPTH) {
@@ -483,7 +473,7 @@ impl Btf {
                 BtfType::Array(Array { array, .. }) => {
                     n_elems = n_elems
                         .checked_mul(array.len as usize)
-                        .ok_or_else(overflow)?;
+                        .ok_or(BtfError::InvalidTypeInfo)?;
                     type_id = array.element_type;
                     continue;
                 }
@@ -501,7 +491,7 @@ impl Btf {
                     }
                 }
             };
-            return size.checked_mul(n_elems).ok_or_else(overflow);
+            return size.checked_mul(n_elems).ok_or(BtfError::InvalidTypeInfo);
         }
 
         Err(BtfError::MaximumTypeDepthReached {
@@ -519,7 +509,7 @@ impl Btf {
     }
 
     // This follows the same logic as libbpf's bpf_object__sanitize_btf() function.
-    // https://github.com/libbpf/libbpf/blob/05f94ddbb837f5f4b3161e341eed21be307eaa04/src/libbpf.c#L2701
+    // https://github.com/libbpf/libbpf/blob/05f94ddbb/src/libbpf.c#L2701
     //
     // Fixup: The loader needs to adjust values in the BTF before it's loaded into the kernel.
     // Sanitize: Replace an unsupported BTF type with a placeholder type.
@@ -637,10 +627,10 @@ impl Btf {
                         // For a DATASEC with zero entries, inject a filler in either case:
                         // 1. Its section size is zero. The kernel rejects zero-sized DATASECs,
                         //    so the filler makes the size non-zero.
-                        //    https://github.com/torvalds/linux/blob/9f4ad9e4/kernel/bpf/btf.c#L3543-L3546
+                        //    https://github.com/torvalds/linux/blob/9f4ad9e42/kernel/bpf/btf.c#L3543-L3546
                         // 2. Its section size is non-zero, but the kernel does not support
                         //    zero-entry DATASECs, as on kernels before Linux 5.12.
-                        //    https://github.com/torvalds/linux/commit/13ca51d5
+                        //    https://github.com/torvalds/linux/commit/13ca51d5e
                         if entries.is_empty()
                             && (section_size == 0
                                 || !features.is_supported(BtfFeature::DataSecZero))
@@ -786,7 +776,7 @@ impl Btf {
                 // Sanitize ENUM64.
                 BtfType::Enum64(ty) if !features.is_supported(BtfFeature::Enum64) => {
                     // Kernels before 6.0 do not support ENUM64. See
-                    // https://github.com/torvalds/linux/commit/6089fb325cf737eeb2c4d236c94697112ca860da.
+                    // https://github.com/torvalds/linux/commit/6089fb325.
                     debug!("{kind}: not supported. replacing with UNION");
 
                     // `ty` is borrowed from `types` and we use that borrow
@@ -928,14 +918,13 @@ impl Btf {
                         f.set_linkage(FuncLinkage::Global);
                     }
 
-                    if let Some(placeholder_name_offset) = placeholder_name_offset {
-                        if let BtfType::FuncProto(func_proto) =
+                    if let Some(placeholder_name_offset) = placeholder_name_offset
+                        && let BtfType::FuncProto(func_proto) =
                             &mut self.types.types[proto_id as usize]
-                        {
-                            for param in &mut func_proto.params {
-                                if param.btf_type != 0 && param.name_offset == 0 {
-                                    param.name_offset = placeholder_name_offset;
-                                }
+                    {
+                        for param in &mut func_proto.params {
+                            if param.btf_type != 0 && param.name_offset == 0 {
+                                param.name_offset = placeholder_name_offset;
                             }
                         }
                     }
@@ -1493,10 +1482,7 @@ mod tests {
         let hugest = btf.add_type(BtfType::Array(Array::new(0, huger, wide, u32::MAX)));
         let hugester = btf.add_type(BtfType::Array(Array::new(0, hugest, wide, u32::MAX)));
         // 8 * u32::MAX fits in a 64-bit usize, but the nested lengths do not.
-        assert_matches!(
-            btf.type_size(hugester),
-            Err(BtfError::TypeSizeOverflow { type_id }) => assert_eq!(type_id, hugester)
-        );
+        assert_matches!(btf.type_size(hugester), Err(BtfError::InvalidTypeInfo));
     }
 
     #[test]

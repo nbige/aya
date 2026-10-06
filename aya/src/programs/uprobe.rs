@@ -413,6 +413,11 @@ impl UProbe {
     /// method first attempts the multi path and falls back to the per-point
     /// path on mode-related failures.
     ///
+    /// Callers that must select or generate the ELF section before loading can use
+    /// [`is_uprobe_multi_supported`](crate::sys::is_uprobe_multi_supported) with the
+    /// [`UProbeMultiFeature`](crate::sys::UProbeMultiFeature) required by their intended
+    /// scope before choosing `uprobe.multi`.
+    ///
     /// The returned value can be used to detach, see [`UProbe::detach`].
     ///
     /// The cookie is supported since kernel 5.15, and it is made available to
@@ -723,6 +728,7 @@ impl TryFrom<UProbeLink> for FdLink {
         match value.into_inner() {
             ProbeLinkInner::One(PerfLinkInner::Fd(link)) => Ok(link),
             ProbeLinkInner::One(PerfLinkInner::PerfLink(_)) | ProbeLinkInner::Many(_) => {
+                // FdLink and PerfLink clean up on drop, including each link in Many.
                 Err(LinkError::InvalidLink)
             }
         }
@@ -936,7 +942,7 @@ fn try_attach_uprobe_multi_link(
             Some(code) if code == ENOTSUP || code == EOPNOTSUPP => true,
             // Multi-uprobe landed in Linux 6.6, older kernels may return EINVAL
             // for the unknown attach type (see BPF_TRACE_UPROBE_MULTI in
-            // https://elixir.bootlin.com/linux/v6.6/source/include/uapi/linux/bpf.h#L1042).
+            // https://github.com/torvalds/linux/blob/ffc253263/include/uapi/linux/bpf.h#L1042).
             Some(code) if code == EINVAL => {
                 KernelVersion::current().is_ok_and(|kv| kv < KernelVersion::new(6, 6, 0))
             }
@@ -1256,15 +1262,13 @@ impl<T: AsRef<[u8]>> ProcMap<T> {
             } = entry?;
             if let Some(path) = path {
                 let path = Path::new(path);
-                if let Some(filename) = path.file_name() {
-                    if let Some(suffix) = filename.strip_prefix(lib) {
-                        if suffix.is_empty()
-                            || suffix.starts_with(OsStr::new(".so"))
-                            || suffix.starts_with(OsStr::new("-"))
-                        {
-                            return Ok(Some(path));
-                        }
-                    }
+                if let Some(filename) = path.file_name()
+                    && let Some(suffix) = filename.strip_prefix(lib)
+                    && (suffix.is_empty()
+                        || suffix.starts_with(OsStr::new(".so"))
+                        || suffix.starts_with(OsStr::new("-")))
+                {
+                    return Ok(Some(path));
                 }
             }
         }

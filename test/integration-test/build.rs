@@ -8,6 +8,8 @@ use std::{
 
 use anyhow::{Context as _, Ok, Result, anyhow};
 use cargo_metadata::{Metadata, MetadataCommand, Package, Target, TargetKind};
+// Keep this build dependency in Cargo's graph to invalidate eBPF artifacts after source changes.
+use integration_ebpf as _;
 use xtask::{AYA_BUILD_INTEGRATION_BPF, LIBBPF_DIR, exec, install_libbpf_headers_cmd};
 
 /// This file, along with the xtask crate, allows analysis tools such as `cargo check`, `cargo
@@ -86,10 +88,18 @@ fn main() -> Result<()> {
         ("enum_unsigned_64_checked_variants_reloc.bpf.c", true),
         ("enum_unsigned_64_reloc.bpf.c", true),
         ("field_reloc.bpf.c", true),
+        ("flex_array_reloc.bpf.c", true),
+        ("nonfinal_zero_array_reloc.bpf.c", false),
+        ("nested_array_bounds_reloc.bpf.c", false),
+        ("target_fixed_array_reloc.bpf.c", true),
+        ("target_nonfinal_zero_array_reloc.bpf.c", true),
         ("pointer_reloc.bpf.c", true),
         ("struct_flavors_reloc.bpf.c", true),
         ("text_64_64_reloc.c", false),
         ("variables_reloc.bpf.c", false),
+        ("func_info_missing_callee.bpf.c", false),
+        ("func_info_missing_program.bpf.c", false),
+        ("func_info_absent.bpf.c", false),
         ("ksyms.bpf.c", true),
         ("ksyms_strong.bpf.c", true),
         ("ksyms_typed_missing_var.bpf.c", true),
