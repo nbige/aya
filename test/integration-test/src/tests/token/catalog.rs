@@ -116,8 +116,8 @@ mod tests {
     #[test]
     fn pass_object_loader_delegation_contracts_remain_exact() {
         assert_eq!(BTF_OBJECT.commands, &[CommandPermission::BtfLoad]);
-        assert!(BTF_OBJECT.program_types.is_empty());
-        assert!(BTF_OBJECT.attach_types.is_empty());
+        assert_eq!(BTF_OBJECT.program_types, []);
+        assert_eq!(BTF_OBJECT.attach_types, []);
         assert_eq!(BTF_OBJECT.capabilities, CapabilityProfile::Token);
         assert_eq!(
             XDP_OBJECT.commands,

@@ -80,6 +80,14 @@ pub(in super::super) fn receive_fd_with_control(
         .context("SCM_RIGHTS message contained no descriptor")
 }
 
+/// Returns `cmsg_len` as a `usize`.
+///
+/// The field is a `usize` with glibc but a `socklen_t` with musl, so widen it through `u64`,
+/// which is a real conversion with either libc.
+fn cmsg_len(header: &libc::cmsghdr) -> usize {
+    header.cmsg_len as u64 as usize
+}
+
 fn adopt_truncated_rights(control: &[u8]) -> Vec<OwnedFd> {
     // SAFETY: CMSG_LEN only computes the aligned header size for the constant zero payload.
     let header_len = unsafe { libc::CMSG_LEN(0) as usize };
@@ -91,10 +99,11 @@ fn adopt_truncated_rights(control: &[u8]) -> Vec<OwnedFd> {
         let header = unsafe {
             std::ptr::read_unaligned(control.as_ptr().add(offset).cast::<libc::cmsghdr>())
         };
-        if header.cmsg_len < header_len {
+        let cmsg_len = cmsg_len(&header);
+        if cmsg_len < header_len {
             break;
         }
-        let Some(message_end) = offset.checked_add(header.cmsg_len) else {
+        let Some(message_end) = offset.checked_add(cmsg_len) else {
             break;
         };
         let message_end = message_end.min(control.len());
@@ -111,8 +120,7 @@ fn adopt_truncated_rights(control: &[u8]) -> Vec<OwnedFd> {
                 received.push(unsafe { OwnedFd::from_raw_fd(raw_fd) });
             }
         }
-        let Some(next) = header
-            .cmsg_len
+        let Some(next) = cmsg_len
             .checked_add(alignment - 1)
             .map(|len| len & !(alignment - 1))
             .and_then(|len| offset.checked_add(len))

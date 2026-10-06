@@ -233,7 +233,7 @@ fn absent_child_diagnostic_returns_without_blocking() {
 
     let diagnostic = read_child_diagnostic(&parent).unwrap();
 
-    assert!(diagnostic.is_empty());
+    assert_eq!(diagnostic, "");
 }
 
 #[test]
