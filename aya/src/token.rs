@@ -16,10 +16,16 @@
 //! 3. The privileged process returns the resulting [`BpfFilesystemMount`].
 //! 4. The owner opens the mount and creates a [`BpfToken`] with local `CAP_BPF`.
 //! 5. The token is passed to [`EbpfLoader::token`](crate::EbpfLoader::token).
+//!
+//! In step 2 the privileged process acts on a descriptor that another process created.
+//! [`BpfFilesystemContext::materialize`] rejects a mount that is not a BPF filesystem, but the
+//! kernel creates the superblock before that check can run. Accept contexts only from peers
+//! that you trust to have created them with [`BpfFilesystemContext::create`].
 
 use std::{
     ffi::{CStr, CString},
     io,
+    mem::MaybeUninit,
     os::{
         fd::{AsFd as _, AsRawFd as _, BorrowedFd, FromRawFd as _, OwnedFd, RawFd},
         unix::ffi::OsStrExt as _,
@@ -171,8 +177,17 @@ impl BpfFilesystemContext {
 
     /// Applies delegation and materializes a detached BPF filesystem mount.
     ///
-    /// This stage must run in a process with `CAP_SYS_ADMIN` in `init_user_ns`.
-    /// All four delegation masks are written exactly, including zero masks.
+    /// This stage must run in a process with `CAP_SYS_ADMIN` in `init_user_ns`. All four
+    /// delegation masks are written, including zero masks. The kernel ORs each mask into the
+    /// context, and only a process with `CAP_SYS_ADMIN` in `init_user_ns` can set a non-zero
+    /// mask, so the context creator cannot add delegations.
+    ///
+    /// # Errors
+    ///
+    /// Returns an error if a configuration step fails, or with
+    /// [`io::ErrorKind::InvalidInput`] if the created mount is not a BPF filesystem. The kernel
+    /// creates the superblock before that check, so only materialize contexts from trusted
+    /// peers.
     pub fn materialize(
         self,
         permissions: FilesystemPermissions,
@@ -212,9 +227,14 @@ impl BpfFilesystemContext {
                 0u32,
             )
         };
-        Ok(BpfFilesystemMount {
-            fd: owned_fd_from_syscall(fd)?,
-        })
+        let fd = owned_fd_from_syscall(fd)?;
+        if !is_bpf_filesystem(fd.as_fd())? {
+            return Err(io::Error::new(
+                io::ErrorKind::InvalidInput,
+                "the filesystem context did not create a BPF filesystem",
+            ));
+        }
+        Ok(BpfFilesystemMount { fd })
     }
 
     fn set_mask(&self, key: &CStr, mask: u64) -> Result<(), io::Error> {
@@ -240,6 +260,17 @@ impl BpfFilesystemContext {
         }
         Ok(())
     }
+}
+
+fn is_bpf_filesystem(fd: BorrowedFd<'_>) -> Result<bool, io::Error> {
+    let mut stat = MaybeUninit::<libc::statfs>::uninit();
+    // SAFETY: `fd` is live and `stat` points to writable memory for one `statfs`.
+    if unsafe { libc::fstatfs(fd.as_raw_fd(), stat.as_mut_ptr()) } < 0 {
+        return Err(io::Error::last_os_error());
+    }
+    // SAFETY: a successful fstatfs initialized `stat`.
+    let stat = unsafe { stat.assume_init() };
+    Ok(i128::from(stat.f_type) & 0xffff_ffff == BPF_FS_MAGIC)
 }
 
 /// A detached delegated BPF filesystem mount suitable for descriptor handoff.
@@ -324,17 +355,26 @@ pub struct FilesystemPermissions {
 
 /// Builder for [`FilesystemPermissions`].
 ///
+/// The kernel lets a token load a program only when the token allows both its program type
+/// and its expected attach type. Programs loaded without an expected attach type, such as
+/// socket filters and tracepoints, use attach type zero, which is
+/// [`BpfAttachType::CgroupInetIngress`]. Loading object BTF also needs
+/// [`BpfCommand::BtfLoad`].
+///
 /// # Example
 ///
 /// ```no_run
 /// use aya::token::FilesystemPermissionsBuilder;
-/// use aya_obj::cmd::BpfCommand;
+/// use aya_obj::{attach::BpfAttachType, cmd::BpfCommand};
 /// use aya::{maps::MapType, programs::ProgramType};
 ///
 /// let perms = FilesystemPermissionsBuilder::default()
 ///     .allow_cmd(BpfCommand::MapCreate)
+///     .allow_cmd(BpfCommand::BtfLoad)
 ///     .allow_cmd(BpfCommand::ProgLoad)
 ///     .allow_prog_type(ProgramType::SocketFilter)
+///     // Socket filters have no expected attach type, which the kernel reads as zero.
+///     .allow_attach_type(BpfAttachType::CgroupInetIngress)
 ///     .allow_map_type(MapType::Array)
 ///     .uid(1000)
 ///     .build();
@@ -381,6 +421,9 @@ impl FilesystemPermissionsBuilder {
     }
 
     /// Allows the given program type to be loaded by token holders.
+    ///
+    /// The token must also allow the program's expected attach type; see
+    /// [`FilesystemPermissionsBuilder`].
     #[must_use]
     pub fn allow_prog_type(mut self, prog_type: ProgramType) -> Self {
         let prog_type: bpf_prog_type = prog_type.into();
@@ -397,6 +440,10 @@ impl FilesystemPermissionsBuilder {
     }
 
     /// Sets the owner UID of the mounted filesystem.
+    ///
+    /// The kernel reads this UID in the user namespace of the process that calls
+    /// [`BpfFilesystemContext::materialize`], and the UID must map into the user namespace that
+    /// created the context.
     #[must_use]
     pub const fn uid(mut self, uid: u32) -> Self {
         self.perms.uid = Some(uid);
@@ -404,6 +451,10 @@ impl FilesystemPermissionsBuilder {
     }
 
     /// Sets the owner GID of the mounted filesystem.
+    ///
+    /// The kernel reads this GID in the user namespace of the process that calls
+    /// [`BpfFilesystemContext::materialize`], and the GID must map into the user namespace that
+    /// created the context.
     #[must_use]
     pub const fn gid(mut self, gid: u32) -> Self {
         self.perms.gid = Some(gid);
@@ -421,3 +472,4 @@ const FSOPEN_CLOEXEC: u32 = 1;
 const FSCONFIG_SET_STRING: u32 = 1;
 const FSCONFIG_CMD_CREATE: u32 = 6;
 const FSMOUNT_CLOEXEC: u32 = 1;
+const BPF_FS_MAGIC: i128 = 0xcafe_4a11;

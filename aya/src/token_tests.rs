@@ -1,7 +1,7 @@
 use std::{
     fs::File,
     io,
-    os::fd::{AsRawFd as _, OwnedFd},
+    os::fd::{AsFd as _, AsRawFd as _, OwnedFd},
 };
 
 use assert_matches::assert_matches;
@@ -9,7 +9,7 @@ use aya_obj::generated::bpf_map_type;
 
 use super::{
     BpfFilesystem, BpfFilesystemContext, BpfFilesystemMount, BpfToken,
-    FilesystemPermissionsBuilder, checked_permission_bit, ensure_cloexec,
+    FilesystemPermissionsBuilder, checked_permission_bit, ensure_cloexec, is_bpf_filesystem,
 };
 use crate::{
     maps::{MapData, MapError},
@@ -27,6 +27,14 @@ fn checked_permission_bit_computes_shift_for_in_range_discriminants() {
 #[should_panic(expected = "does not fit in the 64-bit delegation mask")]
 fn checked_permission_bit_panics_on_out_of_range_discriminant() {
     checked_permission_bit("test", 64);
+}
+
+#[test]
+#[cfg_attr(miri, ignore = "`open` and `fstatfs` require OS file descriptors")]
+fn non_bpf_filesystem_is_rejected() {
+    let file = File::open("/dev/null").unwrap();
+
+    assert!(!is_bpf_filesystem(file.as_fd()).unwrap());
 }
 
 // Every currently-defined kernel discriminant for the four delegation
