@@ -3,7 +3,8 @@
 use crate::generated::bpf_attach_type;
 
 /// The type of BPF attach
-#[derive(Copy, Clone, Debug)]
+#[derive(Copy, Clone, Debug, PartialEq, Eq, Hash)]
+#[non_exhaustive]
 pub enum BpfAttachType {
     /// Cgroup Inet Ingress
     CgroupInetIngress,
@@ -117,6 +118,12 @@ pub enum BpfAttachType {
     NetkitPrimary,
     /// Netkit Peer
     NetkitPeer,
+    /// Trace Kprobe Session
+    TraceKprobeSession,
+    /// Trace Uprobe Session
+    TraceUprobeSession,
+    /// Trace Fsession
+    TraceFsession,
 }
 
 impl From<BpfAttachType> for bpf_attach_type {
@@ -178,6 +185,9 @@ impl From<BpfAttachType> for bpf_attach_type {
             BpfAttachType::CgroupUnixGetsockname => Self::BPF_CGROUP_UNIX_GETSOCKNAME,
             BpfAttachType::NetkitPrimary => Self::BPF_NETKIT_PRIMARY,
             BpfAttachType::NetkitPeer => Self::BPF_NETKIT_PEER,
+            BpfAttachType::TraceKprobeSession => Self::BPF_TRACE_KPROBE_SESSION,
+            BpfAttachType::TraceUprobeSession => Self::BPF_TRACE_UPROBE_SESSION,
+            BpfAttachType::TraceFsession => Self::BPF_TRACE_FSESSION,
         }
     }
 }

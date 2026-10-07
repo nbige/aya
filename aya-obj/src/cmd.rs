@@ -3,7 +3,8 @@
 use crate::generated::bpf_cmd;
 
 /// The type of BPF command
-#[derive(Copy, Clone, Debug)]
+#[derive(Copy, Clone, Debug, PartialEq, Eq, Hash)]
+#[non_exhaustive]
 pub enum BpfCommand {
     /// Map Create
     MapCreate,
@@ -79,6 +80,10 @@ pub enum BpfCommand {
     ProgBindMap,
     /// Token Create
     TokenCreate,
+    /// Program Stream Read By FD
+    ProgStreamReadByFd,
+    /// Program Associate Struct Ops
+    ProgAssocStructOps,
 }
 
 impl From<BpfCommand> for bpf_cmd {
@@ -121,6 +126,8 @@ impl From<BpfCommand> for bpf_cmd {
             BpfCommand::LinkDetach => Self::BPF_LINK_DETACH,
             BpfCommand::ProgBindMap => Self::BPF_PROG_BIND_MAP,
             BpfCommand::TokenCreate => Self::BPF_TOKEN_CREATE,
+            BpfCommand::ProgStreamReadByFd => Self::BPF_PROG_STREAM_READ_BY_FD,
+            BpfCommand::ProgAssocStructOps => Self::BPF_PROG_ASSOC_STRUCT_OPS,
         }
     }
 }
