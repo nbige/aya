@@ -63,7 +63,9 @@
 #![cfg_attr(docsrs, feature(doc_cfg))]
 #![deny(missing_docs)]
 
+pub mod attach;
 pub mod btf;
+pub mod cmd;
 mod extern_types;
 #[expect(
     clippy::all,

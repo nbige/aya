@@ -16,7 +16,7 @@ use aya_obj::{
         VarLinkage,
     },
     generated::{
-        BPF_ALU64, BPF_DW, BPF_EXIT, BPF_F_REPLACE, BPF_F_TEST_RUN_ON_CPU,
+        BPF_ALU64, BPF_DW, BPF_EXIT, BPF_F_REPLACE, BPF_F_TEST_RUN_ON_CPU, BPF_F_TOKEN_FD,
         BPF_F_UPROBE_MULTI_RETURN, BPF_IMM, BPF_JMP, BPF_K, BPF_LD, BPF_MEM, BPF_MOV,
         BPF_PSEUDO_MAP_VALUE, BPF_ST, bpf_attach_type, bpf_attr, bpf_attr__bindgen_ty_7,
         bpf_btf_info, bpf_cmd, bpf_insn, bpf_link_info, bpf_map_info, bpf_map_type, bpf_prog_info,
@@ -41,6 +41,33 @@ use crate::{
     util::KernelVersion,
 };
 
+fn set_map_token(attr: &mut bpf_attr, token_fd: Option<BorrowedFd<'_>>) {
+    if let Some(token_fd) = token_fd {
+        // SAFETY: callers use this helper only while constructing a BPF_MAP_CREATE attribute.
+        let u = unsafe { &mut attr.__bindgen_anon_1 };
+        u.map_flags |= BPF_F_TOKEN_FD;
+        u.map_token_fd = token_fd.as_raw_fd();
+    }
+}
+
+fn set_program_token(attr: &mut bpf_attr, token_fd: Option<BorrowedFd<'_>>) {
+    if let Some(token_fd) = token_fd {
+        // SAFETY: callers use this helper only while constructing a BPF_PROG_LOAD attribute.
+        let u = unsafe { &mut attr.__bindgen_anon_3 };
+        u.prog_flags |= BPF_F_TOKEN_FD;
+        u.prog_token_fd = token_fd.as_raw_fd();
+    }
+}
+
+fn set_btf_token(attr: &mut bpf_attr, token_fd: Option<BorrowedFd<'_>>) {
+    if let Some(token_fd) = token_fd {
+        // SAFETY: callers use this helper only while constructing a BPF_BTF_LOAD attribute.
+        let u = unsafe { &mut attr.__bindgen_anon_7 };
+        u.btf_flags |= BPF_F_TOKEN_FD;
+        u.btf_token_fd = token_fd.as_raw_fd();
+    }
+}
+
 pub(crate) fn bpf_create_iter(link_fd: BorrowedFd<'_>) -> io::Result<crate::MockableFd> {
     let mut attr = unsafe { mem::zeroed::<bpf_attr>() };
 
@@ -56,6 +83,7 @@ pub(crate) fn bpf_create_map(
     def: &aya_obj::Map,
     btf_fd: Option<BorrowedFd<'_>>,
     inner_map_fd: Option<BorrowedFd<'_>>,
+    token_fd: Option<BorrowedFd<'_>>,
 ) -> io::Result<crate::MockableFd> {
     let mut attr = unsafe { mem::zeroed::<bpf_attr>() };
 
@@ -122,6 +150,8 @@ pub(crate) fn bpf_create_map(
             .copy_from_slice(unsafe { mem::transmute::<&[u8], &[c_char]>(&name_bytes[..len]) });
     }
 
+    set_map_token(&mut attr, token_fd);
+
     bpf_map_create(&mut attr)
 }
 
@@ -158,6 +188,7 @@ pub(crate) struct EbpfLoadProgramAttrs<'a> {
     pub(crate) line_info_rec_size: usize,
     pub(crate) line_info: LineSecInfo,
     pub(crate) flags: u32,
+    pub(crate) token_fd: Option<BorrowedFd<'a>>,
 }
 
 pub(crate) fn bpf_load_program(
@@ -219,6 +250,7 @@ pub(crate) fn bpf_load_program(
     if let Some(v) = aya_attr.attach_btf_id {
         u.attach_btf_id = v;
     }
+    set_program_token(&mut attr, aya_attr.token_fd);
     bpf_prog_load(&mut attr)
 }
 
@@ -868,6 +900,13 @@ pub(crate) fn bpf_link_get_info_by_fd(fd: BorrowedFd<'_>) -> Result<bpf_link_inf
     bpf_obj_get_info_by_fd(fd, |_| {})
 }
 
+pub(crate) fn bpf_token_create(bpffs_fd: BorrowedFd<'_>) -> io::Result<crate::MockableFd> {
+    let mut attr = unsafe { mem::zeroed::<bpf_attr>() };
+    attr.token_create.bpffs_fd = bpffs_fd.as_raw_fd() as u32;
+    // SAFETY: BPF_TOKEN_CREATE returns a new file descriptor.
+    unsafe { fd_sys_bpf(bpf_cmd::BPF_TOKEN_CREATE, &mut attr) }
+}
+
 pub(crate) fn btf_obj_get_info_by_fd(
     fd: BorrowedFd<'_>,
     buf: &mut [u8],
@@ -898,6 +937,7 @@ pub(crate) fn bpf_load_btf(
     raw_btf: &[u8],
     log_buf: &mut [u8],
     verifier_log_level: VerifierLogLevel,
+    token_fd: Option<BorrowedFd<'_>>,
 ) -> io::Result<crate::MockableFd> {
     let mut attr = unsafe { mem::zeroed::<bpf_attr>() };
     let u = unsafe { &mut attr.__bindgen_anon_7 };
@@ -908,6 +948,7 @@ pub(crate) fn bpf_load_btf(
         u.btf_log_buf = log_buf.as_mut_ptr() as u64;
         u.btf_log_size = log_buf.len() as u32;
     }
+    set_btf_token(&mut attr, token_fd);
     // SAFETY: `BPF_BTF_LOAD` returns a newly created fd.
     unsafe { fd_sys_bpf(bpf_cmd::BPF_BTF_LOAD, &mut attr) }
 }
@@ -1326,7 +1367,7 @@ pub(crate) fn probe_btf() -> io::Result<bool> {
     btf.add_type(int_type);
     let btf_bytes = btf.to_bytes();
     feature_probe_result(
-        bpf_load_btf(btf_bytes.as_slice(), &mut [], Default::default()),
+        bpf_load_btf(btf_bytes.as_slice(), &mut [], Default::default(), None),
         &[EINVAL],
     )
 }
@@ -1340,14 +1381,8 @@ pub(crate) fn probe_btf_func() -> io::Result<bool> {
     let a_name = btf.add_string("a");
     let b_name = btf.add_string("b");
     let params = vec![
-        BtfParam {
-            name_offset: a_name,
-            btf_type: int_type_id,
-        },
-        BtfParam {
-            name_offset: b_name,
-            btf_type: int_type_id,
-        },
+        BtfParam::new(a_name, int_type_id),
+        BtfParam::new(b_name, int_type_id),
     ];
     let func_proto = BtfType::FuncProto(FuncProto::new(params, int_type_id));
     let func_proto_type_id = btf.add_type(func_proto);
@@ -1359,7 +1394,7 @@ pub(crate) fn probe_btf_func() -> io::Result<bool> {
     let btf_bytes = btf.to_bytes();
 
     feature_probe_result(
-        bpf_load_btf(btf_bytes.as_slice(), &mut [], Default::default()),
+        bpf_load_btf(btf_bytes.as_slice(), &mut [], Default::default(), None),
         &[EINVAL],
     )
 }
@@ -1373,14 +1408,8 @@ pub(crate) fn probe_btf_func_global() -> io::Result<bool> {
     let a_name = btf.add_string("a");
     let b_name = btf.add_string("b");
     let params = vec![
-        BtfParam {
-            name_offset: a_name,
-            btf_type: int_type_id,
-        },
-        BtfParam {
-            name_offset: b_name,
-            btf_type: int_type_id,
-        },
+        BtfParam::new(a_name, int_type_id),
+        BtfParam::new(b_name, int_type_id),
     ];
     let func_proto = BtfType::FuncProto(FuncProto::new(params, int_type_id));
     let func_proto_type_id = btf.add_type(func_proto);
@@ -1392,7 +1421,7 @@ pub(crate) fn probe_btf_func_global() -> io::Result<bool> {
     let btf_bytes = btf.to_bytes();
 
     feature_probe_result(
-        bpf_load_btf(btf_bytes.as_slice(), &mut [], Default::default()),
+        bpf_load_btf(btf_bytes.as_slice(), &mut [], Default::default(), None),
         &[EINVAL],
     )
 }
@@ -1419,7 +1448,7 @@ pub(crate) fn probe_btf_datasec() -> io::Result<bool> {
     let btf_bytes = btf.to_bytes();
 
     feature_probe_result(
-        bpf_load_btf(btf_bytes.as_slice(), &mut [], Default::default()),
+        bpf_load_btf(btf_bytes.as_slice(), &mut [], Default::default(), None),
         &[EINVAL],
     )
 }
@@ -1433,7 +1462,7 @@ pub(crate) fn probe_btf_datasec_zero() -> io::Result<bool> {
     btf.add_type(datasec_type);
 
     feature_probe_result(
-        bpf_load_btf(btf.to_bytes().as_slice(), &mut [], Default::default()),
+        bpf_load_btf(btf.to_bytes().as_slice(), &mut [], Default::default(), None),
         &[EINVAL],
     )
 }
@@ -1452,7 +1481,7 @@ pub(crate) fn probe_btf_enum64() -> io::Result<bool> {
     let btf_bytes = btf.to_bytes();
 
     feature_probe_result(
-        bpf_load_btf(btf_bytes.as_slice(), &mut [], Default::default()),
+        bpf_load_btf(btf_bytes.as_slice(), &mut [], Default::default(), None),
         &[EINVAL],
     )
 }
@@ -1466,7 +1495,7 @@ pub(crate) fn probe_btf_float() -> io::Result<bool> {
     let btf_bytes = btf.to_bytes();
 
     feature_probe_result(
-        bpf_load_btf(btf_bytes.as_slice(), &mut [], Default::default()),
+        bpf_load_btf(btf_bytes.as_slice(), &mut [], Default::default(), None),
         &[EINVAL],
     )
 }
@@ -1488,7 +1517,7 @@ pub(crate) fn probe_btf_decl_tag() -> io::Result<bool> {
     let btf_bytes = btf.to_bytes();
 
     feature_probe_result(
-        bpf_load_btf(btf_bytes.as_slice(), &mut [], Default::default()),
+        bpf_load_btf(btf_bytes.as_slice(), &mut [], Default::default(), None),
         &[EINVAL],
     )
 }
@@ -1508,9 +1537,25 @@ pub(crate) fn probe_btf_type_tag() -> io::Result<bool> {
     let btf_bytes = btf.to_bytes();
 
     feature_probe_result(
-        bpf_load_btf(btf_bytes.as_slice(), &mut [], Default::default()),
+        bpf_load_btf(btf_bytes.as_slice(), &mut [], Default::default(), None),
         &[EINVAL],
     )
+}
+
+/// Returns the BPF and BTF features implied by BPF token support.
+///
+/// This performs no probe syscalls and does not consult `token_fd`: `BPF_TOKEN_CREATE` requires
+/// Linux 6.9, and every feature [`Features`](crate::features::Features) tracks landed years
+/// before that, so a BPF token's existence already proves the kernel supports all of them. The
+/// descriptor documents which token the features are for; it is validated by the kernel when
+/// first passed to a token-enabled command.
+///
+/// Probing through the token would be wrong: each probe uses a fixed program or map type that the
+/// token might not delegate, and the resulting permission error says nothing about kernel
+/// support.
+#[cfg(target_os = "linux")]
+pub const fn detect_features_with_token(_token_fd: BorrowedFd<'_>) -> crate::features::Features {
+    crate::features::Features::implied_by_token()
 }
 
 const BPF_PROG_LOAD_ATTEMPTS: usize = 5;
@@ -1715,6 +1760,180 @@ mod tests {
         assert_eq!(BPF_PROG_LOAD_CALLS.get(), BPF_PROG_LOAD_ATTEMPTS);
     }
 
+    const EXISTING_FLAGS: u32 = 1;
+    const TOKEN_FD: RawFd = 42;
+
+    fn test_map(flags: u32) -> aya_obj::Map {
+        aya_obj::Map::Legacy(LegacyMap {
+            def: bpf_map_def {
+                map_type: bpf_map_type::BPF_MAP_TYPE_ARRAY as u32,
+                key_size: 4,
+                value_size: 8,
+                max_entries: 1,
+                map_flags: flags,
+                ..Default::default()
+            },
+            inner_def: None,
+            section_index: 0,
+            section_kind: EbpfSectionKind::Maps,
+            symbol_index: None,
+            data: Vec::new(),
+        })
+    }
+
+    fn test_program_attrs(token_fd: Option<BorrowedFd<'_>>) -> EbpfLoadProgramAttrs<'_> {
+        EbpfLoadProgramAttrs {
+            name: None,
+            ty: bpf_prog_type::BPF_PROG_TYPE_SOCKET_FILTER,
+            insns: &[],
+            license: c"GPL",
+            kernel_version: 0,
+            expected_attach_type: None,
+            prog_btf_fd: None,
+            attach_btf_obj_fd: None,
+            attach_btf_id: None,
+            attach_prog_fd: None,
+            func_info_rec_size: 0,
+            func_info: Default::default(),
+            line_info_rec_size: 0,
+            line_info: Default::default(),
+            flags: EXISTING_FLAGS,
+            token_fd,
+        }
+    }
+
+    #[test]
+    fn map_create_sets_token_flag_when_token_fd_is_present() {
+        override_syscall(|call| match call {
+            Syscall::Ebpf {
+                cmd: bpf_cmd::BPF_MAP_CREATE,
+                attr,
+            } => {
+                let u = unsafe { attr.__bindgen_anon_1 };
+                assert_eq!(u.map_token_fd, TOKEN_FD);
+                assert_eq!(u.map_flags, EXISTING_FLAGS | BPF_F_TOKEN_FD);
+                assert_eq!(u.map_type, bpf_map_type::BPF_MAP_TYPE_ARRAY as u32);
+                Ok(crate::MockableFd::mock_signed_fd().into())
+            }
+            call => panic!("unexpected syscall {call:?}"),
+        });
+
+        let name = c"TEST";
+        // SAFETY: TOKEN_FD is used only as an opaque integer by the mocked syscall.
+        let token_fd = unsafe { BorrowedFd::borrow_raw(TOKEN_FD) };
+        bpf_create_map(name, &test_map(EXISTING_FLAGS), None, None, Some(token_fd)).unwrap();
+    }
+
+    #[test]
+    fn map_create_preserves_flags_when_token_fd_is_absent() {
+        override_syscall(|call| match call {
+            Syscall::Ebpf {
+                cmd: bpf_cmd::BPF_MAP_CREATE,
+                attr,
+            } => {
+                let u = unsafe { attr.__bindgen_anon_1 };
+                assert_eq!(u.map_token_fd, 0);
+                assert_eq!(u.map_flags, EXISTING_FLAGS);
+                assert_eq!(u.map_type, bpf_map_type::BPF_MAP_TYPE_ARRAY as u32);
+                Ok(crate::MockableFd::mock_signed_fd().into())
+            }
+            call => panic!("unexpected syscall {call:?}"),
+        });
+
+        bpf_create_map(c"TEST", &test_map(EXISTING_FLAGS), None, None, None).unwrap();
+    }
+
+    #[test]
+    fn program_load_sets_token_flag_when_token_fd_is_present() {
+        override_syscall(|call| match call {
+            Syscall::Ebpf {
+                cmd: bpf_cmd::BPF_PROG_LOAD,
+                attr,
+            } => {
+                let u = unsafe { attr.__bindgen_anon_3 };
+                assert_eq!(u.prog_token_fd, TOKEN_FD);
+                assert_eq!(u.prog_flags, EXISTING_FLAGS | BPF_F_TOKEN_FD);
+                assert_eq!(
+                    u.prog_type,
+                    bpf_prog_type::BPF_PROG_TYPE_SOCKET_FILTER as u32
+                );
+                Ok(crate::MockableFd::mock_signed_fd().into())
+            }
+            call => panic!("unexpected syscall {call:?}"),
+        });
+
+        // SAFETY: TOKEN_FD is used only as an opaque integer by the mocked syscall.
+        let token_fd = unsafe { BorrowedFd::borrow_raw(TOKEN_FD) };
+        bpf_load_program(
+            &test_program_attrs(Some(token_fd)),
+            &mut [],
+            Default::default(),
+        )
+        .unwrap();
+    }
+
+    #[test]
+    fn program_load_preserves_flags_when_token_fd_is_absent() {
+        override_syscall(|call| match call {
+            Syscall::Ebpf {
+                cmd: bpf_cmd::BPF_PROG_LOAD,
+                attr,
+            } => {
+                let u = unsafe { attr.__bindgen_anon_3 };
+                assert_eq!(u.prog_token_fd, 0);
+                assert_eq!(u.prog_flags, EXISTING_FLAGS);
+                assert_eq!(
+                    u.prog_type,
+                    bpf_prog_type::BPF_PROG_TYPE_SOCKET_FILTER as u32
+                );
+                Ok(crate::MockableFd::mock_signed_fd().into())
+            }
+            call => panic!("unexpected syscall {call:?}"),
+        });
+
+        bpf_load_program(&test_program_attrs(None), &mut [], Default::default()).unwrap();
+    }
+
+    #[test]
+    fn btf_load_sets_token_flag_when_token_fd_is_present() {
+        override_syscall(|call| match call {
+            Syscall::Ebpf {
+                cmd: bpf_cmd::BPF_BTF_LOAD,
+                attr,
+            } => {
+                let u = unsafe { attr.__bindgen_anon_7 };
+                assert_eq!(u.btf_token_fd, TOKEN_FD);
+                assert_eq!(u.btf_flags, BPF_F_TOKEN_FD);
+                assert_eq!(u.btf_size, 3);
+                Ok(crate::MockableFd::mock_signed_fd().into())
+            }
+            call => panic!("unexpected syscall {call:?}"),
+        });
+
+        // SAFETY: TOKEN_FD is used only as an opaque integer by the mocked syscall.
+        let token_fd = unsafe { BorrowedFd::borrow_raw(TOKEN_FD) };
+        bpf_load_btf(&[1, 2, 3], &mut [], Default::default(), Some(token_fd)).unwrap();
+    }
+
+    #[test]
+    fn btf_load_leaves_token_fields_clear_when_token_fd_is_absent() {
+        override_syscall(|call| match call {
+            Syscall::Ebpf {
+                cmd: bpf_cmd::BPF_BTF_LOAD,
+                attr,
+            } => {
+                let u = unsafe { attr.__bindgen_anon_7 };
+                assert_eq!(u.btf_token_fd, 0);
+                assert_eq!(u.btf_flags, 0);
+                assert_eq!(u.btf_size, 3);
+                Ok(crate::MockableFd::mock_signed_fd().into())
+            }
+            call => panic!("unexpected syscall {call:?}"),
+        });
+
+        bpf_load_btf(&[1, 2, 3], &mut [], Default::default(), None).unwrap();
+    }
+
     #[test]
     fn test_attach_with_attributes() {
         const FAKE_FLAGS: u32 = 1234;
@@ -1896,7 +2115,7 @@ bpf_map_type::BPF_MAP_TYPE_DEVMAP_HASH`"]
 
         let name = CString::new("FILTER").unwrap();
         let btf_fd = unsafe { BorrowedFd::borrow_raw(BTF_FD) };
-        bpf_create_map(&name, &map, Some(btf_fd), None).unwrap();
+        bpf_create_map(&name, &map, Some(btf_fd), None, None).unwrap();
     }
 
     #[rstest]
@@ -1942,6 +2161,6 @@ bpf_map_type::BPF_MAP_TYPE_DEVMAP_HASH`"]
 
         let name = CString::new("TEST").unwrap();
         let btf_fd = unsafe { BorrowedFd::borrow_raw(BTF_FD) };
-        bpf_create_map(&name, &map, Some(btf_fd), None).unwrap();
+        bpf_create_map(&name, &map, Some(btf_fd), None, None).unwrap();
     }
 }

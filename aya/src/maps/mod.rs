@@ -838,7 +838,18 @@ impl MapData {
         name: &str,
         btf_fd: Option<BorrowedFd<'_>>,
     ) -> Result<Self, MapError> {
-        Self::create_with_inner_map_fd(obj, name, btf_fd, None)
+        Self::create_with_inner_map_fd(obj, name, btf_fd, None, None)
+    }
+
+    /// Creates a new map with the provided `name`, delegating privilege through the given
+    /// [`BpfToken`](crate::token::BpfToken) file descriptor.
+    pub fn create_with_token(
+        obj: aya_obj::Map,
+        name: &str,
+        btf_fd: Option<BorrowedFd<'_>>,
+        token_fd: BorrowedFd<'_>,
+    ) -> Result<Self, MapError> {
+        Self::create_with_inner_map_fd(obj, name, btf_fd, None, Some(token_fd))
     }
 
     /// Creates a new map with the provided `name` and optional `inner_map_fd` for map-of-maps types.
@@ -847,6 +858,7 @@ impl MapData {
         name: &str,
         btf_fd: Option<BorrowedFd<'_>>,
         inner_map_fd: Option<BorrowedFd<'_>>,
+        token_fd: Option<BorrowedFd<'_>>,
     ) -> Result<Self, MapError> {
         let c_name = CString::new(name)
             .map_err(|std::ffi::NulError { .. }| MapError::InvalidName { name: name.into() })?;
@@ -863,12 +875,13 @@ impl MapData {
             obj.set_max_entries(nr_cpus);
         }
 
-        let fd = bpf_create_map(&c_name, &obj, btf_fd, inner_map_fd).map_err(|io_error| {
-            MapError::CreateError {
-                name: name.into(),
-                io_error,
-            }
-        })?;
+        let fd =
+            bpf_create_map(&c_name, &obj, btf_fd, inner_map_fd, token_fd).map_err(|io_error| {
+                MapError::CreateError {
+                    name: name.into(),
+                    io_error,
+                }
+            })?;
         Ok(Self {
             obj,
             fd: MapFd::from_fd(fd),
@@ -881,6 +894,7 @@ impl MapData {
         name: &str,
         btf_fd: Option<BorrowedFd<'_>>,
         inner_map_obj: Option<aya_obj::Map>,
+        token_fd: Option<BorrowedFd<'_>>,
     ) -> Result<Self, MapError> {
         use std::os::unix::ffi::OsStrExt as _;
 
@@ -906,12 +920,18 @@ impl MapData {
         } else {
             let inner_map;
             let inner_map_fd = if let Some(inner) = inner_map_obj {
-                inner_map = Self::create(inner, &format!("{name}.inner"), btf_fd)?;
+                inner_map = Self::create_with_inner_map_fd(
+                    inner,
+                    &format!("{name}.inner"),
+                    btf_fd,
+                    None,
+                    token_fd,
+                )?;
                 Some(inner_map.fd().as_fd())
             } else {
                 None
             };
-            let map = Self::create_with_inner_map_fd(obj, name, btf_fd, inner_map_fd)?;
+            let map = Self::create_with_inner_map_fd(obj, name, btf_fd, inner_map_fd, token_fd)?;
             map.pin(path).map_err(|error| MapError::PinError {
                 name: Some(name.into()),
                 error,

@@ -583,6 +583,7 @@ impl UProbe {
                         kind: *kind,
                     },
                     first_cookie,
+                    &data.features,
                 )
                 .map_err(|error| attach_error(0, first_offset, error))?;
                 let mut links = ManyProbeLinks::from_first_link(first_link, offsets.len());
@@ -598,6 +599,7 @@ impl UProbe {
                             kind: *kind,
                         },
                         cookie,
+                        &data.features,
                     ) {
                         Ok(()) => {}
                         Err(error) => {
