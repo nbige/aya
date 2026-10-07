@@ -402,19 +402,11 @@ impl Int {
 #[repr(C)]
 #[derive(Debug, Clone)]
 pub struct BtfEnum {
-    pub(crate) name_offset: u32,
-    pub(crate) value: u32,
+    pub name_offset: u32,
+    pub value: u32,
 }
 
 impl BtfEnum {
-    pub const fn name_offset(&self) -> u32 {
-        self.name_offset
-    }
-
-    pub const fn value(&self) -> u32 {
-        self.value
-    }
-
     pub const fn new(name_offset: u32, value: u32) -> Self {
         Self { name_offset, value }
     }
@@ -907,8 +899,8 @@ impl Array {
 #[repr(C)]
 #[derive(Clone, Debug)]
 pub struct BtfParam {
-    pub(crate) name_offset: u32,
-    pub(crate) btf_type: u32,
+    pub name_offset: u32,
+    pub btf_type: u32,
 }
 
 impl BtfParam {
@@ -917,14 +909,6 @@ impl BtfParam {
             name_offset,
             btf_type,
         }
-    }
-
-    pub const fn name_offset(&self) -> u32 {
-        self.name_offset
-    }
-
-    pub const fn btf_type(&self) -> u32 {
-        self.btf_type
     }
 }
 
