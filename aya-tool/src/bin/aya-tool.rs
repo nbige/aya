@@ -29,21 +29,20 @@ fn main() -> Result<(), anyhow::Error> {
     use std::io::Write as _;
 
     let Options { command } = Parser::parse();
-    match command {
+    let bindings = match command {
         Command::Generate {
             btf,
             header,
             names,
             bindgen_args,
         } => {
-            let bindings = if let Some(header) = header {
+            if let Some(header) = header {
                 generate(InputFile::Header(header), &names, &bindgen_args)
             } else {
                 generate(InputFile::Btf(btf), &names, &bindgen_args)
-            }?;
-            std::io::stdout().write_all(bindings.as_bytes())?;
+            }
         }
-    }
-
+    }?;
+    std::io::stdout().write_all(bindings.as_bytes())?;
     Ok(())
 }
