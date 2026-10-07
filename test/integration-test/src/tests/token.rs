@@ -1,9 +1,10 @@
 use std::{
     ffi::CStr,
+    fs,
     io::{self, IoSlice, IoSliceMut},
     os::{
         fd::{AsRawFd as _, BorrowedFd, FromRawFd as _, OwnedFd, RawFd},
-        unix::process::CommandExt as _,
+        unix::{fs::PermissionsExt as _, process::CommandExt as _},
     },
     process::Command,
 };
@@ -23,8 +24,8 @@ use aya_obj::{attach::BpfAttachType, cmd::BpfCommand};
 use nix::{
     cmsg_space,
     sys::socket::{
-        AddressFamily, ControlMessage, ControlMessageOwned, MsgFlags, SockFlag, SockType, recv,
-        recvmsg, sendmsg, socketpair,
+        AddressFamily, ControlMessage, ControlMessageOwned, MsgFlags, SockFlag, SockType, recvmsg,
+        sendmsg, socketpair,
     },
 };
 
@@ -150,30 +151,11 @@ fn receive_fd(socket: &OwnedFd) -> Result<OwnedFd> {
     anyhow::bail!("missing SCM_RIGHTS message")
 }
 
-fn report_setup_stage(socket: RawFd, stage: &'static [u8]) {
-    // SAFETY: the socket is live and the static stage bytes remain readable during send.
-    unsafe {
-        libc::send(
-            socket,
-            stage.as_ptr().cast(),
-            stage.len(),
-            libc::MSG_DONTWAIT | libc::MSG_NOSIGNAL,
-        );
-    }
-}
-
-fn write_namespace_file(
-    path: &CStr,
-    data: &[u8],
-    setup_socket: RawFd,
-    stages: [&'static [u8]; 2],
-) -> io::Result<()> {
+fn write_namespace_file(path: &CStr, data: &[u8]) -> io::Result<()> {
     // SAFETY: `path` is NUL-terminated and the flags need no mode argument.
     let fd = unsafe { libc::open(path.as_ptr(), libc::O_WRONLY | libc::O_CLOEXEC) };
     if fd < 0 {
-        let error = io::Error::last_os_error();
-        report_setup_stage(setup_socket, stages[0]);
-        return Err(error);
+        return Err(io::Error::last_os_error());
     }
     // SAFETY: `fd` was opened above and is owned here.
     let fd = unsafe { OwnedFd::from_raw_fd(fd) };
@@ -184,7 +166,6 @@ fn write_namespace_file(
         Ok(_) => Err(io::Error::from_raw_os_error(libc::EIO)),
         Err(_) => Err(io::Error::last_os_error()),
     }
-    .inspect_err(|_| report_setup_stage(setup_socket, stages[1]))
 }
 
 fn run_in_token_userns(
@@ -214,18 +195,16 @@ fn run_in_token_userns(
         SockFlag::SOCK_CLOEXEC,
     )?;
     let child_fd = child_socket.as_raw_fd();
-    let (setup_parent, setup_child) = socketpair(
-        AddressFamily::Unix,
-        SockType::Datagram,
-        None,
-        SockFlag::SOCK_CLOEXEC,
-    )?;
-    let setup_fd = setup_child.as_raw_fd();
     // SAFETY: getuid/getgid take no arguments and have no memory-safety preconditions.
     let (uid, gid) = unsafe { (libc::getuid(), libc::getgid()) };
     let uid_map = format!("0 {uid} 1");
     let gid_map = format!("0 {gid} 1");
-    let mut command = Command::new(std::env::current_exe()?);
+    // Use a parent-owned executable path whose owner is mapped into the child namespace.
+    let executable_dir = tempfile::tempdir_in("/tmp")?;
+    let executable = executable_dir.path().join("integration-test");
+    fs::copy(std::env::current_exe()?, &executable)?;
+    fs::set_permissions(&executable, fs::Permissions::from_mode(0o700))?;
+    let mut command = Command::new(&executable);
     command
         .args([
             "--exact",
@@ -239,47 +218,18 @@ fn run_in_token_userns(
     unsafe {
         command.pre_exec(move || {
             if libc::unshare(libc::CLONE_NEWUSER | libc::CLONE_NEWNS) != 0 {
-                let error = io::Error::last_os_error();
-                report_setup_stage(setup_fd, b"unshare(CLONE_NEWUSER | CLONE_NEWNS)");
-                return Err(error);
+                return Err(io::Error::last_os_error());
             }
-            write_namespace_file(
-                c"/proc/self/setgroups",
-                b"deny",
-                setup_fd,
-                [b"open /proc/self/setgroups", b"write /proc/self/setgroups"],
-            )?;
-            write_namespace_file(
-                c"/proc/self/uid_map",
-                uid_map.as_bytes(),
-                setup_fd,
-                [b"open /proc/self/uid_map", b"write /proc/self/uid_map"],
-            )?;
-            write_namespace_file(
-                c"/proc/self/gid_map",
-                gid_map.as_bytes(),
-                setup_fd,
-                [b"open /proc/self/gid_map", b"write /proc/self/gid_map"],
-            )?;
+            write_namespace_file(c"/proc/self/setgroups", b"deny")?;
+            write_namespace_file(c"/proc/self/uid_map", uid_map.as_bytes())?;
+            write_namespace_file(c"/proc/self/gid_map", gid_map.as_bytes())?;
             if libc::fcntl(child_fd, libc::F_SETFD, 0) != 0 {
-                let error = io::Error::last_os_error();
-                report_setup_stage(setup_fd, b"fcntl child socket F_SETFD");
-                return Err(error);
+                return Err(io::Error::last_os_error());
             }
-            report_setup_stage(setup_fd, b"exec after successful pre_exec");
             Ok(())
         });
     }
-    let mut child = command.spawn().map_err(|error| {
-        let mut stage = [0; 128];
-        let stage = match recv(setup_parent.as_raw_fd(), &mut stage, MsgFlags::MSG_DONTWAIT) {
-            Ok(len) => std::str::from_utf8(&stage[..len]).unwrap_or("invalid setup stage report"),
-            Err(_) => "before pre_exec or setup stage report unavailable",
-        };
-        anyhow::Error::new(error).context(format!("spawn token userns test: {stage}"))
-    })?;
-    drop(setup_parent);
-    drop(setup_child);
+    let mut child = command.spawn().context("spawn token userns test")?;
     drop(child_socket);
     let result = (|| {
         let context = BpfFilesystemContext::from_owned_fd(receive_fd(&parent_socket)?)?;
