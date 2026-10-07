@@ -1,6 +1,6 @@
 pub mod aya_obj
 pub mod aya_obj::attach
-pub enum aya_obj::attach::BpfAttachType
+#[non_exhaustive] pub enum aya_obj::attach::BpfAttachType
 pub aya_obj::attach::BpfAttachType::CgroupDevice
 pub aya_obj::attach::BpfAttachType::CgroupGetsockopt
 pub aya_obj::attach::BpfAttachType::CgroupInet4Bind
@@ -50,20 +50,29 @@ pub aya_obj::attach::BpfAttachType::TcxEgress
 pub aya_obj::attach::BpfAttachType::TcxIngress
 pub aya_obj::attach::BpfAttachType::TraceFentry
 pub aya_obj::attach::BpfAttachType::TraceFexit
+pub aya_obj::attach::BpfAttachType::TraceFsession
 pub aya_obj::attach::BpfAttachType::TraceIter
 pub aya_obj::attach::BpfAttachType::TraceKprobeMulti
+pub aya_obj::attach::BpfAttachType::TraceKprobeSession
 pub aya_obj::attach::BpfAttachType::TraceRawTp
 pub aya_obj::attach::BpfAttachType::TraceUprobeMulti
+pub aya_obj::attach::BpfAttachType::TraceUprobeSession
 pub aya_obj::attach::BpfAttachType::Xdp
 pub aya_obj::attach::BpfAttachType::XdpCpumap
 pub aya_obj::attach::BpfAttachType::XdpDevmap
 impl core::clone::Clone for aya_obj::attach::BpfAttachType
 pub fn aya_obj::attach::BpfAttachType::clone(&self) -> Self
+impl core::cmp::Eq for aya_obj::attach::BpfAttachType
+impl core::cmp::PartialEq for aya_obj::attach::BpfAttachType
+pub fn aya_obj::attach::BpfAttachType::eq(&self, &Self) -> bool
 impl core::convert::From<aya_obj::attach::BpfAttachType> for aya_obj::generated::bpf_attach_type
 pub fn aya_obj::generated::bpf_attach_type::from(aya_obj::attach::BpfAttachType) -> Self
 impl core::fmt::Debug for aya_obj::attach::BpfAttachType
 pub fn aya_obj::attach::BpfAttachType::fmt(&self, &mut core::fmt::Formatter<'_>) -> core::fmt::Result
+impl core::hash::Hash for aya_obj::attach::BpfAttachType
+pub fn aya_obj::attach::BpfAttachType::hash<__H: core::hash::Hasher>(&self, &mut __H)
 impl core::marker::Copy for aya_obj::attach::BpfAttachType
+impl core::marker::StructuralPartialEq for aya_obj::attach::BpfAttachType
 impl core::marker::Freeze for aya_obj::attach::BpfAttachType
 impl core::marker::Send for aya_obj::attach::BpfAttachType
 impl core::marker::Sync for aya_obj::attach::BpfAttachType
@@ -358,10 +367,10 @@ impl core::marker::UnsafeUnpin for aya_obj::btf::Btf
 impl core::panic::unwind_safe::RefUnwindSafe for aya_obj::btf::Btf
 impl core::panic::unwind_safe::UnwindSafe for aya_obj::btf::Btf
 #[repr(C)] pub struct aya_obj::btf::BtfEnum
+pub aya_obj::btf::BtfEnum::name_offset: u32
+pub aya_obj::btf::BtfEnum::value: u32
 impl aya_obj::btf::BtfEnum
-pub const fn aya_obj::btf::BtfEnum::name_offset(&self) -> u32
 pub const fn aya_obj::btf::BtfEnum::new(u32, u32) -> Self
-pub const fn aya_obj::btf::BtfEnum::value(&self) -> u32
 impl core::clone::Clone for aya_obj::btf::BtfEnum
 pub fn aya_obj::btf::BtfEnum::clone(&self) -> Self
 impl core::fmt::Debug for aya_obj::btf::BtfEnum
@@ -419,9 +428,9 @@ impl core::marker::UnsafeUnpin for aya_obj::btf::BtfMember
 impl core::panic::unwind_safe::RefUnwindSafe for aya_obj::btf::BtfMember
 impl core::panic::unwind_safe::UnwindSafe for aya_obj::btf::BtfMember
 #[repr(C)] pub struct aya_obj::btf::BtfParam
+pub aya_obj::btf::BtfParam::btf_type: u32
+pub aya_obj::btf::BtfParam::name_offset: u32
 impl aya_obj::btf::BtfParam
-pub const fn aya_obj::btf::BtfParam::btf_type(&self) -> u32
-pub const fn aya_obj::btf::BtfParam::name_offset(&self) -> u32
 pub const fn aya_obj::btf::BtfParam::new(u32, u32) -> Self
 impl core::clone::Clone for aya_obj::btf::BtfParam
 pub fn aya_obj::btf::BtfParam::clone(&self) -> Self
@@ -774,7 +783,7 @@ impl core::marker::UnsafeUnpin for aya_obj::btf::Volatile
 impl core::panic::unwind_safe::RefUnwindSafe for aya_obj::btf::Volatile
 impl core::panic::unwind_safe::UnwindSafe for aya_obj::btf::Volatile
 pub mod aya_obj::cmd
-pub enum aya_obj::cmd::BpfCommand
+#[non_exhaustive] pub enum aya_obj::cmd::BpfCommand
 pub aya_obj::cmd::BpfCommand::BtfGetFdById
 pub aya_obj::cmd::BpfCommand::BtfGetNextId
 pub aya_obj::cmd::BpfCommand::BtfLoad
@@ -801,6 +810,7 @@ pub aya_obj::cmd::BpfCommand::MapUpdateElem
 pub aya_obj::cmd::BpfCommand::ObjGet
 pub aya_obj::cmd::BpfCommand::ObjGetInfoByFd
 pub aya_obj::cmd::BpfCommand::ObjPin
+pub aya_obj::cmd::BpfCommand::ProgAssocStructOps
 pub aya_obj::cmd::BpfCommand::ProgAttach
 pub aya_obj::cmd::BpfCommand::ProgBindMap
 pub aya_obj::cmd::BpfCommand::ProgDetach
@@ -808,17 +818,24 @@ pub aya_obj::cmd::BpfCommand::ProgGetFdById
 pub aya_obj::cmd::BpfCommand::ProgGetNextId
 pub aya_obj::cmd::BpfCommand::ProgLoad
 pub aya_obj::cmd::BpfCommand::ProgQuery
+pub aya_obj::cmd::BpfCommand::ProgStreamReadByFd
 pub aya_obj::cmd::BpfCommand::ProgTestRun
 pub aya_obj::cmd::BpfCommand::RawTracepointOpen
 pub aya_obj::cmd::BpfCommand::TaskFdQuery
 pub aya_obj::cmd::BpfCommand::TokenCreate
 impl core::clone::Clone for aya_obj::cmd::BpfCommand
 pub fn aya_obj::cmd::BpfCommand::clone(&self) -> Self
+impl core::cmp::Eq for aya_obj::cmd::BpfCommand
+impl core::cmp::PartialEq for aya_obj::cmd::BpfCommand
+pub fn aya_obj::cmd::BpfCommand::eq(&self, &Self) -> bool
 impl core::convert::From<aya_obj::cmd::BpfCommand> for aya_obj::generated::bpf_cmd
 pub fn aya_obj::generated::bpf_cmd::from(aya_obj::cmd::BpfCommand) -> Self
 impl core::fmt::Debug for aya_obj::cmd::BpfCommand
 pub fn aya_obj::cmd::BpfCommand::fmt(&self, &mut core::fmt::Formatter<'_>) -> core::fmt::Result
+impl core::hash::Hash for aya_obj::cmd::BpfCommand
+pub fn aya_obj::cmd::BpfCommand::hash<__H: core::hash::Hasher>(&self, &mut __H)
 impl core::marker::Copy for aya_obj::cmd::BpfCommand
+impl core::marker::StructuralPartialEq for aya_obj::cmd::BpfCommand
 impl core::marker::Freeze for aya_obj::cmd::BpfCommand
 impl core::marker::Send for aya_obj::cmd::BpfCommand
 impl core::marker::Sync for aya_obj::cmd::BpfCommand
@@ -1746,8 +1763,6 @@ pub fn aya_obj::generated::bpf_link_type::clone(&self) -> Self
 impl core::cmp::Eq for aya_obj::generated::bpf_link_type
 impl core::cmp::PartialEq for aya_obj::generated::bpf_link_type
 pub fn aya_obj::generated::bpf_link_type::eq(&self, &Self) -> bool
-impl core::convert::From<aya_obj::links::BpfLinkType> for aya_obj::generated::bpf_link_type
-pub fn aya_obj::generated::bpf_link_type::from(aya_obj::links::BpfLinkType) -> Self
 impl core::convert::TryFrom<u32> for aya_obj::generated::bpf_link_type
 pub type aya_obj::generated::bpf_link_type::Error = aya_obj::InvalidTypeBinding<u32>
 pub fn aya_obj::generated::bpf_link_type::try_from(u32) -> core::result::Result<Self, Self::Error>
@@ -4939,35 +4954,6 @@ pub type aya_obj::generated::_bindgen_ty_8 = core::ffi::primitives::c_uint
 pub type aya_obj::generated::_bindgen_ty_9 = core::ffi::primitives::c_uint
 pub type aya_obj::generated::_bindgen_ty_95 = core::ffi::primitives::c_uint
 pub mod aya_obj::links
-pub enum aya_obj::links::BpfLinkType
-pub aya_obj::links::BpfLinkType::Cgroup
-pub aya_obj::links::BpfLinkType::Iter
-pub aya_obj::links::BpfLinkType::KprobeMulti
-pub aya_obj::links::BpfLinkType::Netfilter
-pub aya_obj::links::BpfLinkType::Netkit
-pub aya_obj::links::BpfLinkType::Netns
-pub aya_obj::links::BpfLinkType::PerfEvent
-pub aya_obj::links::BpfLinkType::RawTracepoint
-pub aya_obj::links::BpfLinkType::StructOps
-pub aya_obj::links::BpfLinkType::Tcx
-pub aya_obj::links::BpfLinkType::Tracing
-pub aya_obj::links::BpfLinkType::Unspecified
-pub aya_obj::links::BpfLinkType::UprobeMulti
-pub aya_obj::links::BpfLinkType::Xdp
-impl core::clone::Clone for aya_obj::links::BpfLinkType
-pub fn aya_obj::links::BpfLinkType::clone(&self) -> Self
-impl core::convert::From<aya_obj::links::BpfLinkType> for aya_obj::generated::bpf_link_type
-pub fn aya_obj::generated::bpf_link_type::from(aya_obj::links::BpfLinkType) -> Self
-impl core::fmt::Debug for aya_obj::links::BpfLinkType
-pub fn aya_obj::links::BpfLinkType::fmt(&self, &mut core::fmt::Formatter<'_>) -> core::fmt::Result
-impl core::marker::Copy for aya_obj::links::BpfLinkType
-impl core::marker::Freeze for aya_obj::links::BpfLinkType
-impl core::marker::Send for aya_obj::links::BpfLinkType
-impl core::marker::Sync for aya_obj::links::BpfLinkType
-impl core::marker::Unpin for aya_obj::links::BpfLinkType
-impl core::marker::UnsafeUnpin for aya_obj::links::BpfLinkType
-impl core::panic::unwind_safe::RefUnwindSafe for aya_obj::links::BpfLinkType
-impl core::panic::unwind_safe::UnwindSafe for aya_obj::links::BpfLinkType
 pub mod aya_obj::maps
 pub enum aya_obj::maps::Map
 pub aya_obj::maps::Map::Btf(aya_obj::maps::BtfMap)

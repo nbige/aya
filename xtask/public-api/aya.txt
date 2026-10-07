@@ -1772,7 +1772,6 @@ pub fn aya::maps::MapData::create_with_token(aya_obj::maps::Map, &str, core::opt
 pub const fn aya::maps::MapData::fd(&self) -> &aya::maps::MapFd
 pub fn aya::maps::MapData::from_fd(std::os::fd::owned::OwnedFd) -> core::result::Result<Self, aya::maps::MapError>
 pub fn aya::maps::MapData::from_id(u32) -> core::result::Result<Self, aya::maps::MapError>
-pub fn aya::maps::MapData::from_id_with_token(u32, std::os::fd::owned::BorrowedFd<'_>) -> core::result::Result<Self, aya::maps::MapError>
 pub fn aya::maps::MapData::from_pin<P: core::convert::AsRef<std::path::Path>>(P) -> core::result::Result<Self, aya::maps::MapError>
 pub fn aya::maps::MapData::info(&self) -> core::result::Result<aya::maps::MapInfo, aya::maps::MapError>
 pub fn aya::maps::MapData::pin<P: core::convert::AsRef<std::path::Path>>(&self, P) -> core::result::Result<(), aya::pin::PinError>
