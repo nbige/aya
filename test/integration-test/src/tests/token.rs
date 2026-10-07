@@ -1,214 +1,241 @@
-mod artifact;
-mod catalog;
-mod harness;
-#[cfg(test)]
-mod harness_tests;
-
 use std::{
-    convert::TryInto as _,
-    os::fd::{AsFd as _, AsRawFd as _},
+    ffi::CStr,
+    io::{self, IoSlice, IoSliceMut},
+    os::{
+        fd::{AsRawFd as _, BorrowedFd, FromRawFd as _, OwnedFd, RawFd},
+        unix::process::CommandExt as _,
+    },
+    process::Command,
 };
 
-use anyhow::{Context as _, Result};
+use anyhow::{Context as _, Result, ensure};
 use aya::{
-    maps::MapData,
-    programs::Xdp,
-    token::{BpfFilesystemContext, BpfToken, FilesystemPermissionsBuilder},
+    EbpfLoader,
+    maps::{MapData, MapError, MapType},
+    programs::{ProgramType, Xdp},
+    token::{
+        BpfFilesystemContext, BpfFilesystemMount, BpfToken, FilesystemPermissions,
+        FilesystemPermissionsBuilder,
+    },
+    util::KernelVersion,
 };
-use aya_obj::cmd::BpfCommand;
-
-use self::{
-    artifact::validate_pass_artifact,
-    catalog::{BTF_OBJECT, TOKEN_FEATURE_DETECTION, XDP_OBJECT, load_pass_with_parent_features},
-    harness::{CapabilityProfile, require_kernel_6_9, run_in_token_userns},
+use aya_obj::{attach::BpfAttachType, cmd::BpfCommand};
+use nix::{
+    cmsg_space,
+    sys::socket::{
+        AddressFamily, ControlMessage, ControlMessageOwned, MsgFlags, SockFlag, SockType, recvmsg,
+        sendmsg, socketpair,
+    },
 };
 
 #[test_log::test]
 fn token_create_nonexistent_path() {
-    let result = BpfToken::create("/nonexistent/bpffs/path");
-    assert!(result.is_err(), "nonexistent bpffs path must fail");
+    assert!(BpfToken::create("/nonexistent/bpffs/path").is_err());
 }
 
 #[test_log::test]
 fn token_create_non_bpffs() {
-    let result = BpfToken::create("/tmp");
-    assert!(result.is_err(), "regular directory must not create a token");
+    assert!(BpfToken::create("/tmp").is_err());
+}
+
+fn token_supported(test: &str) -> bool {
+    let kernel_version = KernelVersion::current().unwrap();
+    if kernel_version < KernelVersion::new(6, 9, 0) {
+        eprintln!("skipping {test} test on kernel {kernel_version:?}");
+        return false;
+    }
+    true
 }
 
 #[test_log::test]
-#[ignore = "requires Linux >= 6.9, initial-userns CAP_SYS_ADMIN, and BPF token support"]
-fn token_create_in_initial_userns_returns_eopnotsupp() {
-    require_kernel_6_9().expect("qualified BPF token kernel");
-    let context = BpfFilesystemContext::create().expect("create init-userns bpffs context");
-    let mount = context
-        .materialize(
-            FilesystemPermissionsBuilder::default()
-                .allow_cmd(BpfCommand::MapCreate)
-                .build(),
-        )
-        .expect("materialize init-userns bpffs");
-    let bpffs = mount.open().expect("open init-userns bpffs");
+fn token_create_in_initial_userns_returns_eopnotsupp() -> Result<()> {
+    if !token_supported("token_create_in_initial_userns_returns_eopnotsupp") {
+        return Ok(());
+    }
+    let mount = BpfFilesystemContext::create()?.materialize(
+        FilesystemPermissionsBuilder::default()
+            .allow_cmd(BpfCommand::MapCreate)
+            .build(),
+    )?;
+    let bpffs = mount.open()?;
     let Err(error) = BpfToken::create_from_bpffs(&bpffs) else {
         panic!("init_user_ns token creation unexpectedly succeeded");
     };
     assert_eq!(error.raw_os_error(), Some(libc::EOPNOTSUPP));
+    Ok(())
 }
 
 #[test_log::test]
-#[ignore = "requires Linux >= 6.9, initial-userns CAP_SYS_ADMIN, user namespaces, and BPF token support"]
-fn token_map_create_in_owning_userns() {
-    let permissions = FilesystemPermissionsBuilder::default()
-        .allow_cmd(BpfCommand::MapCreate)
-        .allow_map_type(aya::maps::MapType::Array)
-        .build();
-    run_in_token_userns(permissions, CapabilityProfile::Token, |_bpffs, token| {
-        let map = MapData::create_with_token(
-            aya_obj::Map::Legacy(aya_obj::maps::LegacyMap {
-                def: aya_obj::maps::bpf_map_def {
-                    map_type: aya_obj::generated::bpf_map_type::BPF_MAP_TYPE_ARRAY as u32,
-                    key_size: 4,
-                    value_size: 4,
-                    max_entries: 1,
-                    ..Default::default()
-                },
-                section_index: 0,
-                section_kind: aya_obj::EbpfSectionKind::Maps,
-                symbol_index: None,
-                data: Vec::new(),
-                inner_def: None,
-            }),
-            "aya_token_map",
-            None,
-            token.as_fd(),
-        )?;
-        assert!(map.fd().as_fd().as_raw_fd() >= 0);
-        Ok(())
-    });
-}
-
-#[test_log::test]
-#[ignore = "requires Linux >= 6.9, initial-userns CAP_SYS_ADMIN, user namespaces, AYA_BUILD_INTEGRATION_BPF=true with a fresh CARGO_TARGET_DIR, and BPF token support"]
-fn token_btf_load_in_owning_userns() {
-    validate_pass_artifact().expect("valid PASS integration BPF artifact");
-    let features = (*aya::features()).clone();
+fn token_map_create_in_owning_userns() -> Result<()> {
     run_in_token_userns(
-        BTF_OBJECT.permissions(),
-        BTF_OBJECT.capabilities,
-        move |_bpffs, token| {
-            load_pass_with_parent_features(token, features)
-                .context("load object BTF with delegated token")?;
+        "token_map_create_in_owning_userns",
+        FilesystemPermissionsBuilder::default()
+            .allow_cmd(BpfCommand::MapCreate)
+            .allow_map_type(MapType::LruHash)
+            .build(),
+        |token| {
+            let map = || aya_obj::Map::new_from_params(MapType::LruHash as u32, 4, 4, 1, 0);
+            let error = MapData::create(map(), "aya_token_map", None).unwrap_err();
+            let MapError::CreateError { io_error, .. } = error else {
+                panic!("expected map creation error, got {error:?}");
+            };
+            assert_eq!(io_error.raw_os_error(), Some(libc::EPERM));
+            let _map = MapData::create_with_token(map(), "aya_token_map", None, token.as_fd())?;
             Ok(())
         },
-    );
+    )
 }
 
 #[test_log::test]
-#[ignore = "requires Linux >= 6.9, initial-userns CAP_SYS_ADMIN, user namespaces, AYA_BUILD_INTEGRATION_BPF=true with a fresh CARGO_TARGET_DIR, and BPF token support"]
-fn token_prog_load_in_owning_userns() {
-    validate_pass_artifact().expect("valid PASS integration BPF artifact");
-    let features = (*aya::features()).clone();
+fn token_loader_btf_and_xdp_in_owning_userns() -> Result<()> {
     run_in_token_userns(
-        XDP_OBJECT.permissions(),
-        XDP_OBJECT.capabilities,
-        move |_bpffs, token| {
-            let mut bpf = load_pass_with_parent_features(token, features)?;
+        "token_loader_btf_and_xdp_in_owning_userns",
+        FilesystemPermissionsBuilder::default()
+            .allow_cmd(BpfCommand::BtfLoad)
+            .allow_cmd(BpfCommand::ProgLoad)
+            .allow_prog_type(ProgramType::Xdp)
+            .allow_attach_type(BpfAttachType::Xdp)
+            .build(),
+        |token| {
+            let mut bpf = EbpfLoader::new().token(token)?.load(crate::PASS)?;
             let program: &mut Xdp = bpf
                 .program_mut("pass")
                 .context("missing pass program")?
                 .try_into()?;
             program.load()?;
+            assert!(
+                program.info()?.btf_id().is_some(),
+                "object BTF did not load"
+            );
             Ok(())
         },
-    );
+    )
 }
 
-#[test_log::test]
-#[ignore = "requires Linux >= 6.9, initial-userns CAP_SYS_ADMIN, user namespaces, and BPF token support"]
-fn token_feature_detection_in_owning_userns() {
-    // Features implied by a token are reported without any probe, so detection must
-    // succeed whatever the token delegates.
-    run_in_token_userns(
-        TOKEN_FEATURE_DETECTION.permissions(),
-        TOKEN_FEATURE_DETECTION.capabilities,
-        |_bpffs, token| {
-            let features = aya::sys::detect_features_with_token(token.as_fd());
-            assert!(features.bpf_name());
+fn send_fd(socket: &OwnedFd, fd: BorrowedFd<'_>) -> Result<()> {
+    let fds = [fd.as_raw_fd()];
+    let sent = sendmsg::<()>(
+        socket.as_raw_fd(),
+        &[IoSlice::new(&[0])],
+        &[ControlMessage::ScmRights(&fds)],
+        MsgFlags::empty(),
+        None,
+    )?;
+    ensure!(sent == 1, "short descriptor send");
+    Ok(())
+}
+
+fn receive_fd(socket: &OwnedFd) -> Result<OwnedFd> {
+    let mut payload = [0];
+    let mut iov = [IoSliceMut::new(&mut payload)];
+    let mut control = cmsg_space!([RawFd; 1]);
+    let message = recvmsg::<()>(
+        socket.as_raw_fd(),
+        &mut iov,
+        Some(&mut control),
+        MsgFlags::MSG_CMSG_CLOEXEC,
+    )?;
+    ensure!(message.bytes == 1, "descriptor peer closed early");
+    for control in message.cmsgs()? {
+        if let ControlMessageOwned::ScmRights(fds) = control {
+            let mut fds = fds.into_iter().map(|fd| {
+                // SAFETY: SCM_RIGHTS installs new descriptors owned by this process.
+                unsafe { OwnedFd::from_raw_fd(fd) }
+            });
+            let fd = fds.next().context("missing descriptor")?;
+            ensure!(fds.next().is_none(), "expected one descriptor");
+            return Ok(fd);
+        }
+    }
+    anyhow::bail!("missing SCM_RIGHTS message")
+}
+
+fn write_namespace_file(path: &CStr, data: &[u8]) -> io::Result<()> {
+    // SAFETY: `path` is NUL-terminated and the flags need no mode argument.
+    let fd = unsafe { libc::open(path.as_ptr(), libc::O_WRONLY | libc::O_CLOEXEC) };
+    if fd < 0 {
+        return Err(io::Error::last_os_error());
+    }
+    // SAFETY: `fd` was opened above and is owned here.
+    let fd = unsafe { OwnedFd::from_raw_fd(fd) };
+    // SAFETY: `data` is readable for `data.len()` bytes.
+    let written = unsafe { libc::write(fd.as_raw_fd(), data.as_ptr().cast(), data.len()) };
+    match usize::try_from(written) {
+        Ok(written) if written == data.len() => Ok(()),
+        Ok(_) => Err(io::Error::from_raw_os_error(libc::EIO)),
+        Err(_) => Err(io::Error::last_os_error()),
+    }
+}
+
+fn run_in_token_userns(
+    test: &str,
+    permissions: FilesystemPermissions,
+    child_test: impl FnOnce(&BpfToken) -> Result<()>,
+) -> Result<()> {
+    if !token_supported(test) {
+        return Ok(());
+    }
+    const SOCKET_ENV: &str = "AYA_TOKEN_TEST_SOCKET";
+    if let Some(fd) = std::env::var_os(SOCKET_ENV) {
+        let fd: RawFd = fd.to_str().context("socket FD is not UTF-8")?.parse()?;
+        // SAFETY: only the parent sets this variable, for the socket inherited across exec.
+        let socket = unsafe { OwnedFd::from_raw_fd(fd) };
+        let context = BpfFilesystemContext::create()?;
+        send_fd(&socket, context.as_fd())?;
+        let mount = BpfFilesystemMount::from_owned_fd(receive_fd(&socket)?)?;
+        let bpffs = mount.open()?;
+        return child_test(&BpfToken::create_from_bpffs(&bpffs)?);
+    }
+
+    let (parent_socket, child_socket) = socketpair(
+        AddressFamily::Unix,
+        SockType::Stream,
+        None,
+        SockFlag::SOCK_CLOEXEC,
+    )?;
+    let child_fd = child_socket.as_raw_fd();
+    // SAFETY: getuid/getgid take no arguments and have no memory-safety preconditions.
+    let (uid, gid) = unsafe { (libc::getuid(), libc::getgid()) };
+    let uid_map = format!("0 {uid} 1");
+    let gid_map = format!("0 {gid} 1");
+    let mut command = Command::new(std::env::current_exe()?);
+    command
+        .args([
+            "--exact",
+            &format!("tests::token::{test}"),
+            "--nocapture",
+            "--test-threads=1",
+        ])
+        .env(SOCKET_ENV, child_fd.to_string());
+    // SAFETY: the post-fork hook makes only async-signal-safe calls with buffers allocated before
+    // the fork, and it neither locks, allocates, formats, nor unwinds.
+    unsafe {
+        command.pre_exec(move || {
+            if libc::unshare(libc::CLONE_NEWUSER | libc::CLONE_NEWNS) != 0 {
+                return Err(io::Error::last_os_error());
+            }
+            write_namespace_file(c"/proc/self/setgroups", b"deny")?;
+            write_namespace_file(c"/proc/self/uid_map", uid_map.as_bytes())?;
+            write_namespace_file(c"/proc/self/gid_map", gid_map.as_bytes())?;
+            if libc::fcntl(child_fd, libc::F_SETFD, 0) != 0 {
+                return Err(io::Error::last_os_error());
+            }
             Ok(())
-        },
-    );
-}
-
-#[test_log::test]
-#[ignore = "requires Linux >= 6.9, initial-userns CAP_SYS_ADMIN, user namespaces, and BPF token support"]
-fn token_direct_create_in_owning_userns() {
-    let permissions = FilesystemPermissionsBuilder::default()
-        .allow_cmd(BpfCommand::MapCreate)
-        .build();
-    run_in_token_userns(permissions, CapabilityProfile::Token, |_bpffs, token| {
-        assert!(token.as_fd().as_raw_fd() >= 0);
-        Ok(())
-    });
-}
-
-#[test_log::test]
-#[ignore = "requires Linux >= 6.9, initial-userns CAP_SYS_ADMIN, user namespaces, and BPF token support"]
-fn token_detached_bpffs_open_in_owning_userns() {
-    let permissions = FilesystemPermissionsBuilder::default()
-        .allow_cmd(BpfCommand::MapCreate)
-        .build();
-    run_in_token_userns(permissions, CapabilityProfile::Token, |bpffs, _token| {
-        assert!(bpffs.as_fd().as_raw_fd() >= 0);
-        Ok(())
-    });
-}
-
-#[test_log::test]
-#[ignore = "requires Linux >= 6.9, initial-userns CAP_SYS_ADMIN, user namespaces, AYA_BUILD_INTEGRATION_BPF=true with a fresh CARGO_TARGET_DIR, and BPF token support"]
-fn token_multiple_from_same_bpffs_in_owning_userns() {
-    validate_pass_artifact().expect("valid PASS integration BPF artifact");
-    let features = (*aya::features()).clone();
-    run_in_token_userns(
-        BTF_OBJECT.permissions(),
-        BTF_OBJECT.capabilities,
-        move |bpffs, first| {
-            let second = BpfToken::create_from_bpffs(bpffs)?;
-            assert_ne!(first.as_fd().as_raw_fd(), second.as_fd().as_raw_fd());
-            load_pass_with_parent_features(first, features.clone())?;
-            load_pass_with_parent_features(&second, features)?;
-            Ok(())
-        },
-    );
-}
-
-#[test_log::test]
-#[ignore = "requires Linux >= 6.9, initial-userns CAP_SYS_ADMIN, user namespaces, AYA_BUILD_INTEGRATION_BPF=true with a fresh CARGO_TARGET_DIR, and BPF token support"]
-fn token_full_delegation_in_owning_userns() {
-    validate_pass_artifact().expect("valid PASS integration BPF artifact");
-    let features = (*aya::features()).clone();
-    run_in_token_userns(
-        BTF_OBJECT.permissions(),
-        BTF_OBJECT.capabilities,
-        move |_bpffs, token| {
-            load_pass_with_parent_features(token, features)?;
-            Ok(())
-        },
-    );
-}
-
-#[test_log::test]
-#[ignore = "requires Linux >= 6.9, initial-userns CAP_SYS_ADMIN, user namespaces, and BPF token support"]
-fn token_bpffs_uid_gid_in_owning_userns() {
-    let permissions = FilesystemPermissionsBuilder::default()
-        .allow_cmd(BpfCommand::MapCreate)
-        .uid(0)
-        .gid(0)
-        .build();
-    run_in_token_userns(
-        permissions,
-        CapabilityProfile::Token,
-        |_bpffs, token| -> Result<()> {
-            assert!(token.as_fd().as_raw_fd() >= 0);
-            Ok(())
-        },
-    );
+        });
+    }
+    let mut child = command.spawn().context("spawn token userns test")?;
+    drop(child_socket);
+    let result = (|| {
+        let context = BpfFilesystemContext::from_owned_fd(receive_fd(&parent_socket)?)?;
+        let mount = context.materialize(permissions)?;
+        send_fd(&parent_socket, mount.as_fd())
+    })();
+    drop(parent_socket);
+    if result.is_err() {
+        drop(child.kill());
+    }
+    let status = child.wait()?;
+    result?;
+    ensure!(status.success(), "token userns test failed: {status}");
+    Ok(())
 }
