@@ -1,12 +1,16 @@
 //! Kernel feature support.
 //!
-//! Most callers use the process-ambient feature set ([`Features::ambient`]), which reads
-//! through [`crate::kernel_features::FEATURES`]. Nothing is probed until a feature is queried,
-//! and each feature is probed at most once per process.
-//! Loading through a BPF token instead uses [`Features::implied_by_token`], which performs no
+//! Internally, Aya reads the process-ambient feature set through a process-wide probe cache.
+//! Nothing is probed until a feature is queried, and each feature is probed at most once per
+//! process.
+//! [`crate::features()`] instead returns a fixed snapshot: it probes every feature once, so a
+//! clone taken before a privilege drop or a fork keeps its values.
+//! Loading through a BPF token uses the features implied by token support, and performs no
 //! probes at all: `BPF_TOKEN_CREATE` requires Linux 6.9, and every feature tracked here landed
 //! years before that, so the token's mere existence already proves the kernel supports all of
 //! them.
+
+use std::sync::LazyLock;
 
 use aya_obj::btf::BtfFeature;
 
@@ -65,17 +69,19 @@ const TOKEN_IMPLIED_FEATURE_VERSIONS: [(&str, MinKernelVersion); 7] = [
 /// here. Every entry below predates [`MIN_TOKEN_KERNEL_VERSION`] too.
 ///
 /// - `btf`: `BPF_BTF_LOAD`, kernel 4.18.
-/// - `Func`/`Float`: kernel 5.1.
-/// - `FuncGlobal`/`DataSec`/`DataSecZero`: kernel 5.2.
+/// - `Func`: kernel 4.20.
+/// - `DataSec`/`DataSecZero`: kernel 5.2.
+/// - `FuncGlobal`: kernel 5.6.
+/// - `Float`: kernel 5.13.
 /// - `DeclTag`: kernel 5.16.
 /// - `TypeTag`: kernel 5.17.
 /// - `Enum64`: kernel 6.0
 ///   (<https://lwn.net/Articles/893267/>).
 const TOKEN_IMPLIED_BTF_FEATURE_VERSIONS: [(&str, MinKernelVersion); 9] = [
     ("btf", (4, 18, 0)),
-    ("Func", (5, 1, 0)),
-    ("Float", (5, 1, 0)),
-    ("FuncGlobal", (5, 2, 0)),
+    ("Func", (4, 20, 0)),
+    ("Float", (5, 13, 0)),
+    ("FuncGlobal", (5, 6, 0)),
     ("DataSec", (5, 2, 0)),
     ("DataSecZero", (5, 2, 0)),
     ("DeclTag", (5, 16, 0)),
@@ -140,6 +146,33 @@ impl BtfCapabilities {
         repr: BtfRepr::Ambient,
     };
 
+    #[expect(clippy::fn_params_excessive_bools, reason = "mirrors Features::new")]
+    #[expect(clippy::too_many_arguments, reason = "mirrors Features::new")]
+    #[doc(hidden)]
+    pub const fn new(
+        func: bool,
+        func_global: bool,
+        datasec: bool,
+        datasec_zero: bool,
+        float: bool,
+        decl_tag: bool,
+        type_tag: bool,
+        enum64: bool,
+    ) -> Self {
+        Self {
+            repr: BtfRepr::Fixed(FixedBtfCapabilities {
+                func,
+                func_global,
+                datasec,
+                datasec_zero,
+                float,
+                decl_tag,
+                type_tag,
+                enum64,
+            }),
+        }
+    }
+
     /// Returns whether the given BTF feature is supported.
     pub fn is_supported(&self, feature: BtfFeature) -> bool {
         let fixed = match &self.repr {
@@ -173,11 +206,11 @@ impl BtfCapabilities {
     }
 }
 
-/// Kernel BPF and BTF feature support, either the process-ambient set or the set implied by a
-/// BPF token.
+/// Kernel BPF and BTF feature support.
 ///
-/// The ambient set is evaluated lazily: each feature is probed the first time it is queried and
-/// the result is shared by the whole process.
+/// A value is either the lazy process-ambient set used internally by Aya, a fixed snapshot
+/// returned by [`crate::features()`], the set implied by a BPF token, or a set built by the
+/// caller.
 #[derive(Clone, Debug, Default, PartialEq, Eq)]
 pub struct Features {
     repr: FeaturesRepr,
@@ -247,6 +280,37 @@ impl Features {
         Self {
             repr: FeaturesRepr::Ambient,
         }
+    }
+
+    /// Returns a fixed snapshot of the process-ambient feature set.
+    ///
+    /// This queries every feature, and every BTF capability when BTF is supported, through the
+    /// process-wide probe cache. The result reads no probe afterwards, so it keeps its values
+    /// when it is cloned and used after a privilege drop or a fork.
+    pub(crate) fn detect() -> Self {
+        let btf = FEATURES.btf().map(|_| {
+            let supported = |feature| BtfCapabilities::AMBIENT.is_supported(feature);
+            BtfCapabilities::new(
+                supported(BtfFeature::Func),
+                supported(BtfFeature::FuncGlobal),
+                supported(BtfFeature::DataSec),
+                supported(BtfFeature::DataSecZero),
+                supported(BtfFeature::Float),
+                supported(BtfFeature::DeclTag),
+                supported(BtfFeature::TypeTag),
+                supported(BtfFeature::Enum64),
+            )
+        });
+        Self::new(
+            FEATURES.is_supported(Feature::BpfName),
+            FEATURES.is_supported(Feature::BpfProbeReadKernel),
+            FEATURES.is_supported(Feature::BpfPerfLink),
+            FEATURES.is_supported(Feature::BpfGlobalData),
+            FEATURES.is_supported(Feature::BpfCookie),
+            FEATURES.is_supported(Feature::CpuMapProgId),
+            FEATURES.is_supported(Feature::DevMapProgId),
+            btf,
+        )
     }
 
     /// Returns the features implied by BPF token support.
@@ -351,8 +415,8 @@ impl Features {
     }
 }
 
-/// The process-ambient feature set. Nothing is probed until a feature is queried.
-pub(crate) static AMBIENT: Features = Features::ambient();
+/// The fixed snapshot returned by [`crate::features()`]. Every feature is probed on first use.
+pub(crate) static DETECTED: LazyLock<Features> = LazyLock::new(Features::detect);
 
 #[cfg(test)]
 mod tests {
@@ -406,10 +470,42 @@ mod tests {
         });
 
         let features = Features::ambient();
-        assert_eq!(features, crate::features::AMBIENT);
+        assert_eq!(features, Features::ambient());
         assert_ne!(features, Features::default());
         assert_ne!(features, Features::implied_by_token());
         assert_eq!(BtfCapabilities::default(), BtfCapabilities::default());
+    }
+
+    /// A snapshot must be fixed: once it exists, no accessor may issue a probe syscall, so a
+    /// snapshot taken before a privilege drop keeps the values it had.
+    #[test]
+    fn snapshot_is_fixed() {
+        let features = Features::new(
+            true,
+            false,
+            true,
+            false,
+            true,
+            false,
+            true,
+            Some(BtfCapabilities::new(
+                true, false, true, false, true, false, true, false,
+            )),
+        );
+        override_syscall(|call| panic!("unexpected syscall after snapshot: {call:?}"));
+
+        assert!(features.bpf_name());
+        assert!(!features.bpf_probe_read_kernel());
+        assert!(features.bpf_perf_link());
+        assert!(!features.bpf_global_data());
+        assert!(features.bpf_cookie());
+        assert!(!features.cpumap_prog_id());
+        assert!(features.devmap_prog_id());
+        let btf = features.btf().unwrap();
+        assert!(btf.is_supported(BtfFeature::Func));
+        assert!(!btf.is_supported(BtfFeature::FuncGlobal));
+        assert!(btf.is_supported(BtfFeature::DataSec));
+        assert!(!btf.is_supported(BtfFeature::Enum64));
     }
 
     #[test]

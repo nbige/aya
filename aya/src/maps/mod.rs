@@ -63,7 +63,6 @@ use thiserror::Error;
 
 use crate::{
     PinningType, Pod,
-    features::Features,
     pin::PinError,
     sys::{
         SyscallError, bpf_create_map, bpf_get_object, bpf_map_freeze, bpf_map_get_fd_by_id,
@@ -830,8 +829,6 @@ pub(crate) const fn check_v_size<V>(map: &MapData) -> Result<(), MapError> {
 pub struct MapData {
     obj: aya_obj::Map,
     fd: MapFd,
-    /// The detected BPF features at the time this map was created.
-    pub(crate) features: Features,
 }
 
 impl MapData {
@@ -841,29 +838,18 @@ impl MapData {
         name: &str,
         btf_fd: Option<BorrowedFd<'_>>,
     ) -> Result<Self, MapError> {
-        Self::create_with_inner_map_fd(obj, name, btf_fd, None, None, Features::ambient())
+        Self::create_with_inner_map_fd(obj, name, btf_fd, None, None)
     }
 
     /// Creates a new map with the provided `name`, delegating privilege through the given
     /// [`BpfToken`](crate::token::BpfToken) file descriptor.
-    ///
-    /// The map records the features implied by BPF token support, so that, for example,
-    /// [`CpuMap`](crate::maps::xdp::CpuMap) and [`DevMap`](crate::maps::xdp::DevMap) use the
-    /// value layout the kernel supports.
     pub fn create_with_token(
         obj: aya_obj::Map,
         name: &str,
         btf_fd: Option<BorrowedFd<'_>>,
         token_fd: BorrowedFd<'_>,
     ) -> Result<Self, MapError> {
-        Self::create_with_inner_map_fd(
-            obj,
-            name,
-            btf_fd,
-            None,
-            Some(token_fd),
-            crate::sys::detect_features_with_token(token_fd),
-        )
+        Self::create_with_inner_map_fd(obj, name, btf_fd, None, Some(token_fd))
     }
 
     /// Creates a new map with the provided `name` and optional `inner_map_fd` for map-of-maps types.
@@ -873,7 +859,6 @@ impl MapData {
         btf_fd: Option<BorrowedFd<'_>>,
         inner_map_fd: Option<BorrowedFd<'_>>,
         token_fd: Option<BorrowedFd<'_>>,
-        features: Features,
     ) -> Result<Self, MapError> {
         let c_name = CString::new(name)
             .map_err(|std::ffi::NulError { .. }| MapError::InvalidName { name: name.into() })?;
@@ -900,7 +885,6 @@ impl MapData {
         Ok(Self {
             obj,
             fd: MapFd::from_fd(fd),
-            features,
         })
     }
 
@@ -911,7 +895,6 @@ impl MapData {
         btf_fd: Option<BorrowedFd<'_>>,
         inner_map_obj: Option<aya_obj::Map>,
         token_fd: Option<BorrowedFd<'_>>,
-        features: Features,
     ) -> Result<Self, MapError> {
         use std::os::unix::ffi::OsStrExt as _;
 
@@ -933,7 +916,6 @@ impl MapData {
             Ok(Self {
                 obj,
                 fd: MapFd::from_fd(fd),
-                features,
             })
         } else {
             let inner_map;
@@ -944,20 +926,12 @@ impl MapData {
                     btf_fd,
                     None,
                     token_fd,
-                    features.clone(),
                 )?;
                 Some(inner_map.fd().as_fd())
             } else {
                 None
             };
-            let map = Self::create_with_inner_map_fd(
-                obj,
-                name,
-                btf_fd,
-                inner_map_fd,
-                token_fd,
-                features,
-            )?;
+            let map = Self::create_with_inner_map_fd(obj, name, btf_fd, inner_map_fd, token_fd)?;
             map.pin(path).map_err(|error| MapError::PinError {
                 name: Some(name.into()),
                 error,
@@ -967,7 +941,7 @@ impl MapData {
     }
 
     pub(crate) fn finalize(&mut self) -> Result<(), MapError> {
-        let Self { obj, fd, .. } = self;
+        let Self { obj, fd } = self;
         if !obj.data().is_empty() {
             bpf_map_update_elem_ptr(fd.as_fd(), &0, obj.data_mut().as_mut_ptr(), 0)
                 .map_err(|io_error| SyscallError {
@@ -1006,39 +980,20 @@ impl MapData {
             io_error,
         })?;
 
-        Self::from_fd_inner(fd, Features::ambient())
+        Self::from_fd_inner(fd)
     }
 
     /// Loads a map from a map id.
     pub fn from_id(id: u32) -> Result<Self, MapError> {
-        Self::from_id_inner(id, Features::ambient())
-    }
-
-    /// Loads a map from a map id, resolving kernel features using the given
-    /// BPF token rather than the process' ambient (untokenized) features.
-    ///
-    /// Use this when the map being reopened was created (directly or
-    /// transitively, e.g. via a pinned path under a token-scoped bpffs
-    /// mount) with a [`BpfToken`](crate::token::BpfToken) whose delegated
-    /// privileges may differ from the ambient process capabilities: the
-    /// feature set in effect at creation time, not the ambient one, is what
-    /// determines behavior such as [`CpuMap`](crate::maps::xdp::CpuMap) and
-    /// [`DevMap`](crate::maps::xdp::DevMap) prog-id support.
-    pub fn from_id_with_token(id: u32, token_fd: BorrowedFd<'_>) -> Result<Self, MapError> {
-        Self::from_id_inner(id, crate::sys::detect_features_with_token(token_fd))
-    }
-
-    fn from_id_inner(id: u32, features: Features) -> Result<Self, MapError> {
         let fd = bpf_map_get_fd_by_id(id)?;
-        Self::from_fd_inner(fd, features)
+        Self::from_fd_inner(fd)
     }
 
-    fn from_fd_inner(fd: crate::MockableFd, features: Features) -> Result<Self, MapError> {
+    fn from_fd_inner(fd: crate::MockableFd) -> Result<Self, MapError> {
         let MapInfo(info) = MapInfo::new_from_fd(fd.as_fd())?;
         Ok(Self {
             obj: parse_map_info(info, PinningType::None),
             fd: MapFd::from_fd(fd),
-            features,
         })
     }
 
@@ -1049,7 +1004,7 @@ impl MapData {
     /// For example, you received an FD over Unix Domain Socket.
     pub fn from_fd(fd: OwnedFd) -> Result<Self, MapError> {
         let fd = crate::MockableFd::from_fd(fd);
-        Self::from_fd_inner(fd, Features::ambient())
+        Self::from_fd_inner(fd)
     }
 
     /// Allows the map to be pinned to the provided path.
@@ -1079,7 +1034,7 @@ impl MapData {
     pub fn pin<P: AsRef<Path>>(&self, path: P) -> Result<(), PinError> {
         use std::os::unix::ffi::OsStrExt as _;
 
-        let Self { fd, .. } = self;
+        let Self { fd, obj: _ } = self;
         let path = path.as_ref();
         let path_string = CString::new(path.as_os_str().as_bytes()).map_err(|error| {
             PinError::InvalidPinPath {
@@ -1096,12 +1051,12 @@ impl MapData {
 
     /// Returns the file descriptor of the map.
     pub const fn fd(&self) -> &MapFd {
-        let Self { obj: _, fd, .. } = self;
+        let Self { obj: _, fd } = self;
         fd
     }
 
     pub(crate) const fn obj(&self) -> &aya_obj::Map {
-        let Self { obj, .. } = self;
+        let Self { obj, fd: _ } = self;
         obj
     }
 
@@ -1406,42 +1361,7 @@ mod tests {
             Ok(MapData {
                 obj: _,
                 fd,
-                features,
-            }) => {
-                assert_eq!(fd.as_fd().as_raw_fd(), crate::MockableFd::mock_signed_fd());
-                // `from_id` without a token resolves the ambient (untokenized)
-                // process features, not a fabricated token-derived set.
-                assert_eq!(features, Features::ambient());
-            }
-        );
-    }
-
-    #[test]
-    fn test_from_map_id_uses_supplied_features_not_ambient() {
-        override_syscall(|call| match call {
-            Syscall::Ebpf {
-                cmd: bpf_cmd::BPF_MAP_GET_FD_BY_ID,
-                ..
-            } => Ok(crate::MockableFd::mock_signed_fd().into()),
-            Syscall::Ebpf {
-                cmd: bpf_cmd::BPF_OBJ_GET_INFO_BY_FD,
-                ..
-            } => Ok(0),
-            _ => Err((-1, io::Error::from_raw_os_error(EFAULT))),
-        });
-
-        // A features value that deliberately differs from the ambient
-        // `Features::ambient()` default, standing in for a token-scoped
-        // feature set: `MapData::from_id_inner` must stamp the map with
-        // exactly the features it was given, never silently substitute the
-        // process-ambient set. This is what a caller-supplied BPF token
-        // (via `from_id_with_token`) relies on.
-        let token_features = Features::new(true, true, true, true, true, true, true, None);
-        assert_ne!(token_features, Features::ambient());
-
-        assert_matches!(
-            MapData::from_id_inner(1234, token_features.clone()),
-            Ok(MapData { features, .. }) => assert_eq!(features, token_features)
+            }) => assert_eq!(fd.as_fd().as_raw_fd(), crate::MockableFd::mock_signed_fd())
         );
     }
 
@@ -1460,7 +1380,6 @@ mod tests {
             Ok(MapData {
                 obj: _,
                 fd,
-                ..
             }) => assert_eq!(fd.as_fd().as_raw_fd(), crate::MockableFd::mock_signed_fd())
         );
     }
@@ -1485,7 +1404,6 @@ mod tests {
             Ok(MapData {
                 obj,
                 fd,
-                ..
             }) => {
                 assert_eq!(fd.as_fd().as_raw_fd(), crate::MockableFd::mock_signed_fd());
                 assert_eq!(obj.max_entries(), nr_cpus)
@@ -1501,7 +1419,6 @@ mod tests {
             Ok(MapData {
                 obj,
                 fd,
-                ..
             }) => {
                 assert_eq!(fd.as_fd().as_raw_fd(), crate::MockableFd::mock_signed_fd());
                 assert_eq!(obj.max_entries(), nr_cpus + 1)

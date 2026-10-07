@@ -58,11 +58,13 @@ unsafe impl<T: Pod, const N: usize> Pod for [T; N] {}
 
 pub use aya_obj::maps::{PinningType, bpf_map_def};
 
-/// Returns a reference to the process-ambient BPF features.
+/// Returns a fixed snapshot of the process-ambient BPF features.
 ///
-/// Each feature is probed the first time it is queried, at most once per process.
+/// The first call probes every feature, at most once per process. The snapshot reads no probe
+/// afterwards, so a clone taken before a privilege drop or a fork keeps its values. Use such a
+/// clone with [`EbpfLoader::token_with_features`].
 pub fn features() -> &'static Features {
-    &crate::features::AMBIENT
+    &crate::features::DETECTED
 }
 
 #[derive(Debug)]
@@ -272,8 +274,13 @@ impl<'a> EbpfLoader<'a> {
 
     /// Sets a BPF token for unprivileged BPF operations.
     ///
-    /// When a token is set, feature detection and all BPF syscalls (map creation,
-    /// program loading, BTF loading) will use the token for privilege delegation.
+    /// When a token is set, the loader passes it to map creation, program loading, and BTF
+    /// loading. Other BPF commands, such as link creation, do not take a token. The loader uses
+    /// the features implied by BPF token support and probes nothing (see
+    /// [`crate::sys::detect_features_with_token`]).
+    ///
+    /// The loader, and every program it loads, keeps a duplicate of the token descriptor. Use
+    /// [`Ebpf::finalize_token_loading`] to release the program references.
     ///
     /// # Minimum kernel version
     ///
@@ -299,9 +306,13 @@ impl<'a> EbpfLoader<'a> {
     /// Sets a BPF token and caller-supplied kernel features.
     ///
     /// Unlike [`Self::token`], which assumes every feature implied by BPF token support (see
-    /// [`crate::sys::detect_features_with_token`]), this uses exactly the features given. Use it
-    /// to restrict the loader to features detected before privilege reduction, for example when
-    /// the token delegates only some map and program types.
+    /// [`crate::sys::detect_features_with_token`]), this uses exactly the features given. To use
+    /// features detected before a privilege drop, clone [`crate::features()`] while still
+    /// privileged: that value is a fixed snapshot.
+    ///
+    /// Features that are false change how the object loads. For example, without
+    /// `bpf_global_data` the loader drops `.data`, `.rodata`, and `.bss` maps, and without
+    /// BTF support it loads no object BTF.
     ///
     /// # Errors
     ///
@@ -762,7 +773,6 @@ impl<'a> EbpfLoader<'a> {
                     btf_fd,
                     inner_map_obj,
                     token_fd,
-                    features.clone(),
                 )?
             } else {
                 match map_obj.pinning() {
@@ -775,7 +785,6 @@ impl<'a> EbpfLoader<'a> {
                                 btf_fd,
                                 None,
                                 token_fd,
-                                features.clone(),
                             )?;
                             Some(btf_inner_map.fd().as_fd())
                         } else {
@@ -787,7 +796,6 @@ impl<'a> EbpfLoader<'a> {
                             btf_fd,
                             inner_map_fd,
                             token_fd,
-                            features.clone(),
                         )?
                     }
                     PinningType::ByName => {
@@ -805,7 +813,6 @@ impl<'a> EbpfLoader<'a> {
                             btf_fd,
                             inner_map_obj,
                             token_fd,
-                            features.clone(),
                         )?
                     }
                 }

@@ -8,7 +8,7 @@ use std::{
 
 use aya_obj::generated::bpf_cpumap_val;
 
-use super::XdpMapError;
+use super::{XdpMapError, has_chained_program};
 use crate::{
     Pod,
     maps::{IterableMap, MapData, MapError, check_bounds, check_kv_size},
@@ -58,7 +58,7 @@ impl<T: Borrow<MapData>> CpuMap<T> {
     pub(crate) fn new(map: T) -> Result<Self, MapError> {
         let data = map.borrow();
 
-        if data.features.cpumap_prog_id() {
+        if has_chained_program::<bpf_cpumap_val>(data) {
             check_kv_size::<u32, bpf_cpumap_val>(data)?;
         } else {
             check_kv_size::<u32, u32>(data)?;
@@ -85,7 +85,7 @@ impl<T: Borrow<MapData>> CpuMap<T> {
         check_bounds(data, cpu_index)?;
         let fd = data.fd().as_fd();
 
-        let value = if data.features.cpumap_prog_id() {
+        let value = if has_chained_program::<bpf_cpumap_val>(data) {
             bpf_map_lookup_elem::<_, bpf_cpumap_val>(fd, &cpu_index, flags).map(|value| {
                 value.map(|value| CpuMapValue {
                     queue_size: value.qsize,
@@ -147,7 +147,7 @@ impl<T: BorrowMut<MapData>> CpuMap<T> {
         check_bounds(data, cpu_index)?;
         let fd = data.fd().as_fd();
 
-        let res = if data.features.cpumap_prog_id() {
+        let res = if has_chained_program::<bpf_cpumap_val>(data) {
             let mut value = unsafe { std::mem::zeroed::<bpf_cpumap_val>() };
             value.qsize = queue_size;
             // Default is valid as the kernel will only consider fd > 0:
