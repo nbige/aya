@@ -159,7 +159,7 @@ pub(crate) fn bpf_pin_object(fd: BorrowedFd<'_>, path: &CStr) -> io::Result<()> 
     let mut attr = unsafe { mem::zeroed::<bpf_attr>() };
     let u = unsafe { &mut attr.__bindgen_anon_4 };
     u.bpf_fd = fd.as_raw_fd() as u32;
-    u.pathname = path.as_ptr() as u64;
+    u.pathname = path.as_ptr().expose_provenance() as u64;
     unit_sys_bpf(bpf_cmd::BPF_OBJ_PIN, &mut attr)
 }
 
@@ -167,7 +167,7 @@ pub(crate) fn bpf_pin_object(fd: BorrowedFd<'_>, path: &CStr) -> io::Result<()> 
 pub(crate) fn bpf_get_object(path: &CStr) -> io::Result<crate::MockableFd> {
     let mut attr = unsafe { mem::zeroed::<bpf_attr>() };
     let u = unsafe { &mut attr.__bindgen_anon_4 };
-    u.pathname = path.as_ptr() as u64;
+    u.pathname = path.as_ptr().expose_provenance() as u64;
     // SAFETY: BPF_OBJ_GET returns a new file descriptor.
     unsafe { fd_sys_bpf(bpf_cmd::BPF_OBJ_GET, &mut attr) }
 }
@@ -212,9 +212,9 @@ pub(crate) fn bpf_load_program(
     if let Some(v) = aya_attr.expected_attach_type {
         u.expected_attach_type = v as u32;
     }
-    u.insns = aya_attr.insns.as_ptr() as u64;
+    u.insns = aya_attr.insns.as_ptr().expose_provenance() as u64;
     u.insn_cnt = aya_attr.insns.len() as u32;
-    u.license = aya_attr.license.as_ptr() as u64;
+    u.license = aya_attr.license.as_ptr().expose_provenance() as u64;
     u.kern_version = aya_attr.kernel_version;
 
     // these must be allocated here to ensure the slice outlives the pointer
@@ -225,19 +225,19 @@ pub(crate) fn bpf_load_program(
     if let Some(btf_fd) = aya_attr.prog_btf_fd {
         u.prog_btf_fd = btf_fd.as_raw_fd() as u32;
         if aya_attr.line_info_rec_size > 0 {
-            u.line_info = line_info_buf.as_ptr() as u64;
+            u.line_info = line_info_buf.as_ptr().expose_provenance() as u64;
             u.line_info_cnt = aya_attr.line_info.len() as u32;
             u.line_info_rec_size = aya_attr.line_info_rec_size as u32;
         }
         if aya_attr.func_info_rec_size > 0 {
-            u.func_info = func_info_buf.as_ptr() as u64;
+            u.func_info = func_info_buf.as_ptr().expose_provenance() as u64;
             u.func_info_cnt = aya_attr.func_info.len() as u32;
             u.func_info_rec_size = aya_attr.func_info_rec_size as u32;
         }
     }
     if !log_buf.is_empty() {
         u.log_level = verifier_log_level.bits();
-        u.log_buf = log_buf.as_mut_ptr() as u64;
+        u.log_buf = log_buf.as_mut_ptr().expose_provenance() as u64;
         u.log_size = log_buf.len() as u32;
     }
     if let Some(v) = aya_attr.attach_btf_obj_fd {
@@ -266,9 +266,9 @@ fn lookup<K: Pod, V: Pod>(
     let u = unsafe { &mut attr.__bindgen_anon_2 };
     u.map_fd = fd.as_raw_fd() as u32;
     if let Some(key) = key {
-        u.key = ptr::from_ref(key) as u64;
+        u.key = ptr::from_ref(key).expose_provenance() as u64;
     }
-    u.__bindgen_anon_1.value = ptr::from_mut(&mut value) as u64;
+    u.__bindgen_anon_1.value = ptr::from_mut(&mut value).expose_provenance() as u64;
     u.flags = flags;
 
     match unit_sys_bpf(cmd, &mut attr) {
@@ -318,9 +318,9 @@ pub(crate) fn bpf_map_lookup_elem_ptr<K: Pod, V>(
     let u = unsafe { &mut attr.__bindgen_anon_2 };
     u.map_fd = fd.as_raw_fd() as u32;
     if let Some(key) = key {
-        u.key = ptr::from_ref(key) as u64;
+        u.key = ptr::from_ref(key).expose_provenance() as u64;
     }
-    u.__bindgen_anon_1.value = value as u64;
+    u.__bindgen_anon_1.value = value.expose_provenance() as u64;
     u.flags = flags;
 
     match unit_sys_bpf(bpf_cmd::BPF_MAP_LOOKUP_ELEM, &mut attr) {
@@ -339,7 +339,7 @@ pub(crate) fn bpf_map_peek_elem<V: Pod>(
 
     let u = unsafe { &mut attr.__bindgen_anon_2 };
     u.map_fd = fd.as_raw_fd() as u32;
-    u.__bindgen_anon_1.value = ptr::from_ref(value) as u64;
+    u.__bindgen_anon_1.value = ptr::from_ref(value).expose_provenance() as u64;
     u.flags = flags;
 
     match unit_sys_bpf(bpf_cmd::BPF_MAP_LOOKUP_ELEM, &mut attr) {
@@ -360,9 +360,9 @@ pub(crate) fn bpf_map_update_elem<K: Pod, V: Pod>(
     let u = unsafe { &mut attr.__bindgen_anon_2 };
     u.map_fd = fd.as_raw_fd() as u32;
     if let Some(key) = key {
-        u.key = ptr::from_ref(key) as u64;
+        u.key = ptr::from_ref(key).expose_provenance() as u64;
     }
-    u.__bindgen_anon_1.value = ptr::from_ref(value) as u64;
+    u.__bindgen_anon_1.value = ptr::from_ref(value).expose_provenance() as u64;
     u.flags = flags;
 
     unit_sys_bpf(bpf_cmd::BPF_MAP_UPDATE_ELEM, &mut attr)
@@ -377,7 +377,7 @@ pub(crate) fn bpf_map_push_elem<V: Pod>(
 
     let u = unsafe { &mut attr.__bindgen_anon_2 };
     u.map_fd = fd.as_raw_fd() as u32;
-    u.__bindgen_anon_1.value = ptr::from_ref(value) as u64;
+    u.__bindgen_anon_1.value = ptr::from_ref(value).expose_provenance() as u64;
     u.flags = flags;
 
     unit_sys_bpf(bpf_cmd::BPF_MAP_UPDATE_ELEM, &mut attr)
@@ -393,8 +393,8 @@ pub(crate) fn bpf_map_update_elem_ptr<K, V>(
 
     let u = unsafe { &mut attr.__bindgen_anon_2 };
     u.map_fd = fd.as_raw_fd() as u32;
-    u.key = key as u64;
-    u.__bindgen_anon_1.value = value as u64;
+    u.key = key.expose_provenance() as u64;
+    u.__bindgen_anon_1.value = value.expose_provenance() as u64;
     u.flags = flags;
 
     unit_sys_bpf(bpf_cmd::BPF_MAP_UPDATE_ELEM, &mut attr)
@@ -415,7 +415,7 @@ pub(crate) fn bpf_map_delete_elem<K: Pod>(fd: BorrowedFd<'_>, key: &K) -> io::Re
 
     let u = unsafe { &mut attr.__bindgen_anon_2 };
     u.map_fd = fd.as_raw_fd() as u32;
-    u.key = ptr::from_ref(key) as u64;
+    u.key = ptr::from_ref(key).expose_provenance() as u64;
 
     unit_sys_bpf(bpf_cmd::BPF_MAP_DELETE_ELEM, &mut attr)
 }
@@ -430,9 +430,9 @@ pub(crate) fn bpf_map_get_next_key<K: Pod>(
     let u = unsafe { &mut attr.__bindgen_anon_2 };
     u.map_fd = fd.as_raw_fd() as u32;
     if let Some(key) = key {
-        u.key = ptr::from_ref(key) as u64;
+        u.key = ptr::from_ref(key).expose_provenance() as u64;
     }
-    u.__bindgen_anon_1.next_key = ptr::from_mut(&mut next_key) as u64;
+    u.__bindgen_anon_1.next_key = ptr::from_mut(&mut next_key).expose_provenance() as u64;
 
     match unit_sys_bpf(bpf_cmd::BPF_MAP_GET_NEXT_KEY, &mut attr) {
         Ok(()) => Ok(Some(unsafe { next_key.assume_init() })),
@@ -540,14 +540,15 @@ pub(crate) fn bpf_link_create(
                 flags,
             } => {
                 let multi = unsafe { &mut attr.link_create.__bindgen_anon_3.uprobe_multi };
-                multi.path = path.as_ptr() as u64;
-                multi.offsets = offsets.as_ptr() as u64;
+                multi.path = path.as_ptr().expose_provenance() as u64;
+                multi.offsets = offsets.as_ptr().expose_provenance() as u64;
                 multi.cnt = offsets.len() as u32;
                 multi.flags = flags;
                 multi.pid = pid;
-                multi.ref_ctr_offsets =
-                    ref_ctr_offsets.map_or_default(|slice| slice.as_ptr() as u64);
-                multi.cookies = cookies.map_or_default(|slice| slice.as_ptr() as u64);
+                multi.ref_ctr_offsets = ref_ctr_offsets
+                    .map_or_default(|slice| slice.as_ptr().expose_provenance() as u64);
+                multi.cookies =
+                    cookies.map_or_default(|slice| slice.as_ptr().expose_provenance() as u64);
             }
         }
     }
@@ -683,7 +684,7 @@ pub(crate) fn bpf_prog_query(
     attr.query.attach_type = attach_type as u32;
     attr.query.query_flags = query_flags;
     attr.query.__bindgen_anon_2.prog_cnt = prog_ids.len() as u32;
-    attr.query.prog_ids = prog_ids.as_mut_ptr() as u64;
+    attr.query.prog_ids = prog_ids.as_mut_ptr().expose_provenance() as u64;
     let ret = unit_sys_bpf(bpf_cmd::BPF_PROG_QUERY, &mut attr);
 
     *prog_cnt = unsafe { attr.query.__bindgen_anon_2.prog_cnt };
@@ -743,22 +744,22 @@ pub(crate) fn bpf_prog_test_run(
     test.batch_size = batch_size;
 
     if let Some(data_in) = data_in {
-        test.data_in = data_in.as_ptr() as u64;
+        test.data_in = data_in.as_ptr().expose_provenance() as u64;
         test.data_size_in = data_in.len() as u32;
     }
 
     if let Some(data_out) = data_out {
-        test.data_out = data_out.as_mut_ptr() as u64;
+        test.data_out = data_out.as_mut_ptr().expose_provenance() as u64;
         test.data_size_out = data_out.len() as u32;
     }
 
     if let Some(ctx_in) = ctx_in {
-        test.ctx_in = ctx_in.as_ptr() as u64;
+        test.ctx_in = ctx_in.as_ptr().expose_provenance() as u64;
         test.ctx_size_in = ctx_in.len() as u32;
     }
 
     if let Some(ctx_out) = ctx_out {
-        test.ctx_out = ctx_out.as_mut_ptr() as u64;
+        test.ctx_out = ctx_out.as_mut_ptr().expose_provenance() as u64;
         test.ctx_size_out = ctx_out.len() as u32;
     }
 
@@ -793,7 +794,7 @@ pub(crate) fn bpf_prog_test_run_raw_tp(
     let test = unsafe { &mut attr.test };
     test.prog_fd = prog_fd.as_raw_fd() as u32;
 
-    test.ctx_in = args.as_ptr() as u64;
+    test.ctx_in = args.as_ptr().expose_provenance() as u64;
     test.ctx_size_in = size_of_val(&args) as u32;
 
     if let Some(cpu) = cpu {
@@ -837,7 +838,7 @@ fn bpf_obj_get_info_by_fd<T, F: FnOnce(&mut T)>(
     init(&mut info);
 
     attr.info.bpf_fd = fd.as_raw_fd() as u32;
-    attr.info.info = ptr::from_mut(&mut info) as u64;
+    attr.info.info = ptr::from_mut(&mut info).expose_provenance() as u64;
     attr.info.info_len = size_of_val(&info) as u32;
 
     match unit_sys_bpf(bpf_cmd::BPF_OBJ_GET_INFO_BY_FD, &mut attr) {
@@ -859,7 +860,7 @@ pub(crate) fn bpf_prog_get_info_by_fd(
     bpf_obj_get_info_by_fd(fd, |info: &mut bpf_prog_info| {
         if !map_ids.is_empty() {
             info.nr_map_ids = map_ids.len() as u32;
-            info.map_ids = map_ids.as_mut_ptr() as u64;
+            info.map_ids = map_ids.as_mut_ptr().expose_provenance() as u64;
         }
     })
 }
@@ -912,7 +913,7 @@ pub(crate) fn btf_obj_get_info_by_fd(
     buf: &mut [u8],
 ) -> Result<bpf_btf_info, SyscallError> {
     bpf_obj_get_info_by_fd(fd, |info: &mut bpf_btf_info| {
-        info.btf = buf.as_mut_ptr() as u64;
+        info.btf = buf.as_mut_ptr().expose_provenance() as u64;
         info.btf_size = buf.len() as u32;
     })
 }
@@ -924,7 +925,7 @@ pub(crate) fn bpf_raw_tracepoint_open(
     let mut attr = unsafe { mem::zeroed::<bpf_attr>() };
 
     attr.raw_tracepoint.name = match name {
-        Some(n) => n.as_ptr() as u64,
+        Some(n) => n.as_ptr().expose_provenance() as u64,
         None => 0,
     };
     attr.raw_tracepoint.prog_fd = prog_fd.as_raw_fd() as u32;
@@ -941,11 +942,11 @@ pub(crate) fn bpf_load_btf(
 ) -> io::Result<crate::MockableFd> {
     let mut attr = unsafe { mem::zeroed::<bpf_attr>() };
     let u = unsafe { &mut attr.__bindgen_anon_7 };
-    u.btf = raw_btf.as_ptr() as u64;
+    u.btf = raw_btf.as_ptr().expose_provenance() as u64;
     u.btf_size = size_of_val(raw_btf) as u32;
     if !log_buf.is_empty() {
         u.btf_log_level = verifier_log_level.bits();
-        u.btf_log_buf = log_buf.as_mut_ptr() as u64;
+        u.btf_log_buf = log_buf.as_mut_ptr().expose_provenance() as u64;
         u.btf_log_size = log_buf.len() as u32;
     }
     set_btf_token(&mut attr, token_fd);
@@ -1107,10 +1108,10 @@ where
     let u = unsafe { &mut attr.__bindgen_anon_3 };
 
     let gpl = c"GPL";
-    u.license = gpl.as_ptr() as u64;
+    u.license = gpl.as_ptr().expose_provenance() as u64;
 
     u.insn_cnt = insns.len() as u32;
-    u.insns = insns.as_ptr() as u64;
+    u.insns = insns.as_ptr().expose_provenance() as u64;
 
     // `expected_attach_type` field was added in v4.17 https://github.com/torvalds/linux/blob/29dcea887/include/uapi/linux/bpf.h#L310.
     let expected_attach_type = match program_type {
@@ -1331,9 +1332,9 @@ pub(crate) fn probe_bpf_global_data() -> io::Result<bool> {
     ];
 
     let gpl = c"GPL";
-    u.license = gpl.as_ptr() as u64;
+    u.license = gpl.as_ptr().expose_provenance() as u64;
     u.insn_cnt = insns.len() as u32;
-    u.insns = insns.as_ptr() as u64;
+    u.insns = insns.as_ptr().expose_provenance() as u64;
     u.prog_type = bpf_prog_type::BPF_PROG_TYPE_SOCKET_FILTER as u32;
 
     feature_probe_result(bpf_prog_load(&mut attr), &[EINVAL, E2BIG])
@@ -2031,7 +2032,14 @@ mod tests {
                         bpf_attach_type::BPF_TRACE_UPROBE_MULTI as u32
                     );
                     let multi = unsafe { &link_create.__bindgen_anon_3.uprobe_multi };
-                    assert_eq!(unsafe { CStr::from_ptr(multi.path as *const c_char) }, c"/");
+                    assert_eq!(
+                        unsafe {
+                            CStr::from_ptr(ptr::with_exposed_provenance::<c_char>(
+                                multi.path as usize,
+                            ))
+                        },
+                        c"/"
+                    );
                     let error = match multi.pid {
                         0 => EBADF,
                         u32::MAX => INVALID_PID_ERROR,

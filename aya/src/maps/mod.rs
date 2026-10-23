@@ -1446,9 +1446,9 @@ mod tests {
                 unsafe {
                     let name_bytes = std::mem::transmute::<&[u8], &[c_char]>(TEST_NAME.as_bytes());
                     let info_addr = attr.info.info;
-                    let p = info_addr as *mut bpf_map_info;
+                    let p = ptr::with_exposed_provenance_mut::<bpf_map_info>(info_addr as usize);
                     // Reborrow mutably so Miri checks the output pointer's write permission.
-                    // Casting to *mut alone does not grant that permission.
+                    // Recovering a pointer alone does not grant that permission.
                     let map_info = &mut *p;
                     map_info.name[..name_bytes.len()].copy_from_slice(name_bytes);
                 }
@@ -1488,7 +1488,8 @@ mod tests {
             } => {
                 unsafe {
                     let info = attr.info;
-                    let map_info = info.info as *mut bpf_map_info;
+                    let map_info =
+                        ptr::with_exposed_provenance_mut::<bpf_map_info>(info.info as usize);
                     map_info.write({
                         let mut map_info = map_info.read();
                         map_info.id = info.bpf_fd - crate::MockableFd::mock_unsigned_fd();

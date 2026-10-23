@@ -16,7 +16,7 @@ use aya_obj::{
         bpf_prog_info,
     },
 };
-use libc::{E2BIG, EBADF, EINVAL};
+use libc::{E2BIG, EBADF, EINVAL, EOPNOTSUPP};
 
 use super::{
     SyscallError, UProbeMultiFeature, bpf_map_create, bpf_prog_load, bpf_raw_tracepoint_open,
@@ -231,7 +231,7 @@ pub fn is_helper_supported(
     with_prog_insns(program_type, &insns, |attr| {
         // SAFETY: union access
         let u = unsafe { &mut attr.__bindgen_anon_3 };
-        u.log_buf = verifier_log.as_mut_ptr() as u64;
+        u.log_buf = verifier_log.as_mut_ptr().expose_provenance() as u64;
         u.log_level = 1;
         u.log_size = verifier_log.len() as u32;
         match bpf_prog_load(attr).map(|_: MockableFd| ()) {
@@ -354,7 +354,7 @@ pub fn is_program_supported(program_type: ProgramType) -> Result<bool, ProgramEr
         // If loading fails for tracing, extension, and lsm types due to unset `attach_btf_id`,
         // then we defer to verifier log to verify whether type is supported.
         if let Some(verifier_log) = verifier_log.as_mut() {
-            u.log_buf = verifier_log.as_mut_ptr() as u64;
+            u.log_buf = verifier_log.as_mut_ptr().expose_provenance() as u64;
             u.log_level = 1;
             u.log_size = verifier_log.len() as u32;
         }
@@ -591,6 +591,9 @@ pub fn is_map_supported(map_type: MapType) -> Result<bool, SyscallError> {
     // examination to verify support.
     match io_error.raw_os_error() {
         Some(EINVAL) => Ok(false),
+        // Inode storage requires the BPF LSM to have initialized its security blob at boot.
+        // https://github.com/torvalds/linux/blob/a6f0643e4/kernel/bpf/bpf_inode_storage.c#L179-L191
+        Some(EOPNOTSUPP) if map_type == MapType::InodeStorage => Ok(false),
         // These types use fields that may not exist at the kernel's current version. Supplying
         // `bpf_attr` fields unknown to the kernel triggers `E2BIG` from `bpf_check_uarg_tail_zero()`[0].
         //
@@ -678,7 +681,7 @@ fn probe_bpf_info<T>(fd: MockableFd, mut info: T) -> Result<bool, SyscallError> 
     let mut attr = unsafe { mem::zeroed::<bpf_attr>() };
     attr.info.bpf_fd = fd.as_raw_fd() as u32;
     attr.info.info_len = size_of_val(&info) as u32;
-    attr.info.info = ptr::from_mut(&mut info) as u64;
+    attr.info.info = ptr::from_mut(&mut info).expose_provenance() as u64;
 
     let io_error = match unit_sys_bpf(bpf_cmd::BPF_OBJ_GET_INFO_BY_FD, &mut attr) {
         Ok(()) => return Ok(true),
@@ -698,10 +701,36 @@ fn probe_bpf_info<T>(fd: MockableFd, mut info: T) -> Result<bool, SyscallError> 
 mod tests {
     use std::cell::Cell;
 
+    use libc::EPERM;
     use rstest::rstest;
 
     use super::*;
-    use crate::sys::{Syscall, override_syscall};
+    use crate::sys::{SysResult, Syscall, override_syscall};
+
+    fn map_create_error<const ERRNO: i32>(call: Syscall<'_>) -> SysResult {
+        assert_matches::assert_matches!(call, Syscall::Ebpf { cmd, attr: _ } => {
+            assert_eq!(cmd, bpf_cmd::BPF_MAP_CREATE);
+        });
+        Err((-1, io::Error::from_raw_os_error(ERRNO)))
+    }
+
+    #[rstest]
+    #[case::inactive_inode_storage(MapType::InodeStorage, map_create_error::<EOPNOTSUPP>, Ok(false))]
+    #[case::supported_inode_storage(MapType::InodeStorage, map_create_error::<EBADF>, Ok(true))]
+    #[case::permission_denied(MapType::InodeStorage, map_create_error::<EPERM>, Err(EPERM))]
+    #[case::unrelated_map(MapType::Hash, map_create_error::<EOPNOTSUPP>, Err(EOPNOTSUPP))]
+    fn inode_storage_probe_errors(
+        #[case] map_type: MapType,
+        #[case] syscall: fn(Syscall<'_>) -> SysResult,
+        #[case] expected: Result<bool, i32>,
+    ) {
+        override_syscall(syscall);
+        let result = is_map_supported(map_type).map_err(|SyscallError { call, io_error }| {
+            assert_eq!(call, "bpf_map_create");
+            io_error.raw_os_error().unwrap()
+        });
+        assert_eq!(result, expected);
+    }
 
     // Syscall overrides are function pointers, so they cannot capture a local counter.
     thread_local! {
@@ -738,9 +767,11 @@ mod tests {
                 let attr = unsafe { attr.info };
                 assert_eq!(attr.info_len, size_of::<bpf_prog_info>() as u32);
                 // Reborrow mutably so Miri checks the output pointer's write permission.
-                // Casting to *mut alone does not grant that permission.
+                // Recovering a pointer alone does not grant that permission.
                 // SAFETY: the syscall receives a writable, aligned bpf_prog_info buffer.
-                let info = unsafe { &mut *(attr.info as *mut bpf_prog_info) };
+                let info = unsafe {
+                    &mut *ptr::with_exposed_provenance_mut::<bpf_prog_info>(attr.info as usize)
+                };
                 info.id = 42;
                 Ok(0)
             }

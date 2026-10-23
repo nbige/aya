@@ -96,7 +96,7 @@ mod intrinsics {
 
     #[unsafe(no_mangle)]
     unsafe extern "C" fn memmove(dest: *mut u8, src: *mut u8, n: usize) {
-        let delta = (dest as usize).wrapping_sub(src as usize);
+        let delta = dest.addr().wrapping_sub(src.addr());
         if delta >= n {
             // We can copy forwards because either dest is far enough ahead of src,
             // or src is ahead of dest (and delta overflowed).
@@ -155,13 +155,10 @@ pub fn check_bounds_signed<T: Into<i64>>(value: T, lower: T, upper: T) -> bool {
             );
             in_bounds == 1
         },
-        _ => {
-            // We only need this for doc tests which are compiled for the host target
-            #[expect(clippy::unreachable, reason = "only used for doc tests")]
-            {
-                unreachable!("value={value} lower={lower} upper={upper}")
-            }
-        }
+        _ => {#[expect(clippy::unreachable, reason = "only used for doc tests")]
+        {
+            unreachable!("value={value} lower={lower} upper={upper}")
+        }}
     }
 }
 

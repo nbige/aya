@@ -4,17 +4,16 @@ use std::{
 
 use assert_matches::assert_matches;
 use aya::{
-    Ebpf,
+    Ebpf, EbpfLoader,
     maps::{Array, RingBuf},
     pin::PinError,
     programs::{
         CgroupAttachMode, CgroupSockAddr, FlowDissector, KProbe, LinkOrder, ProbeKind, Program,
-        ProgramError, SchedClassifier, TcAttachType, TracePoint, UProbe, Xdp, XdpMode,
+        ProgramError, SchedClassifier, TcAttach, TcAttachType, TracePoint, UProbe, Xdp, XdpMode,
         flow_dissector::{FlowDissectorLink, FlowDissectorLinkId},
         kprobe::{KProbeLink, KProbeLinkId},
         links::{FdLink, LinkError, PinnedLink},
         loaded_links, loaded_programs,
-        tc::TcAttachOptions,
         trace_point::{TracePointLink, TracePointLinkId},
         uprobe::{UProbeLink, UProbeLinkId, UProbeScope},
         xdp::{XdpLink, XdpLinkId},
@@ -37,7 +36,7 @@ fn long_name() {
         .try_into()
         .unwrap();
     name_prog.load().unwrap();
-    name_prog.attach("lo", XdpMode::default()).unwrap();
+    name_prog.attach(c"lo", XdpMode::default()).unwrap();
 
     // We used to be able to assert with bpftool that the program name was short.
     // It seem though that it now uses the name from the ELF symbol table instead.
@@ -74,69 +73,42 @@ fn ringbuffer_btf_map() {
     assert_eq!(val, 0xdeadbeef);
 }
 
-#[test_log::test]
-fn multiple_btf_maps() {
-    let mut bpf = Ebpf::load(crate::MULTIMAP_BTF).unwrap();
+#[rstest]
+#[case::btf(["map_1", "map_2", "map_pin_by_name"])]
+#[case::legacy(["map_1_legacy", "map_2_legacy", "map_pin_by_name_legacy"])]
+#[test_attr(test_log::test)]
+fn pin_lifecycle_multiple_maps(#[case] map_names: [&str; 3]) {
+    let [_, _, pinned_name] = map_names;
+    let directory = tempfile::Builder::new()
+        .prefix("map-pin-")
+        .tempdir_in("/sys/fs/bpf")
+        .unwrap();
+    let mut loader = EbpfLoader::new();
+    loader.default_map_pin_directory(directory.path());
+    let map_pin_by_name_path = directory.path().join(pinned_name);
 
-    let map_1: Array<_, u64> = bpf.take_map("map_1").unwrap().try_into().unwrap();
-    let map_2: Array<_, u64> = bpf.take_map("map_2").unwrap().try_into().unwrap();
-    let map_pin_by_name: Array<_, u64> =
-        bpf.take_map("map_pin_by_name").unwrap().try_into().unwrap();
-
-    let prog: &mut UProbe = bpf.program_mut("bpf_prog").unwrap().try_into().unwrap();
-    prog.load().unwrap();
-    prog.attach(
-        ["trigger_bpf_program"],
-        "/proc/self/exe",
-        UProbeScope::AllProcesses,
-    )
-    .unwrap();
-
-    trigger_bpf_program();
-
-    let key = 0;
-    let val_1 = map_1.get(&key, 0).unwrap();
-    let val_2 = map_2.get(&key, 0).unwrap();
-    let val_3 = map_pin_by_name.get(&key, 0).unwrap();
-
-    assert_eq!(val_1, 24);
-    assert_eq!(val_2, 42);
-    assert_eq!(val_3, 44);
-    let map_pin = Path::new("/sys/fs/bpf/map_pin_by_name");
-    assert!(&map_pin.exists());
-
-    remove_file(map_pin).unwrap();
-}
-
-#[test_log::test]
-fn pin_lifecycle_multiple_btf_maps() {
-    let mut bpf = Ebpf::load(crate::MULTIMAP_BTF).unwrap();
-
-    // "map_pin_by_name" should already be pinned, unpin and pin again later
-    let map_pin_by_name_path = Path::new("/sys/fs/bpf/map_pin_by_name");
-
+    // Only the pin should keep the map alive between loads.
+    {
+        let mut bpf = loader.load(crate::MULTIMAP).unwrap();
+        let mut map: Array<_, u64> = bpf.map_mut(pinned_name).unwrap().try_into().unwrap();
+        map.set(0, &1, 0).unwrap();
+    }
     assert!(map_pin_by_name_path.exists());
-    remove_file(map_pin_by_name_path).unwrap();
 
-    // pin and unpin all maps before casting to explicit types
-    for (i, (name, map)) in bpf.maps_mut().enumerate() {
-        // Don't pin system maps or the map that's already pinned by name.
-        if name.contains(".rodata") || name.contains(".bss") {
-            continue;
-        }
-        let map_pin_path = &Path::new("/sys/fs/bpf/").join(i.to_string());
+    let mut bpf = loader.load(crate::MULTIMAP).unwrap();
+    let map_pin_by_name: Array<_, u64> = bpf.map(pinned_name).unwrap().try_into().unwrap();
+    assert_eq!(map_pin_by_name.get(&0, 0).unwrap(), 1);
+    remove_file(&map_pin_by_name_path).unwrap();
 
-        map.pin(map_pin_path).unwrap();
-
-        assert!(map_pin_path.exists());
-        remove_file(map_pin_path).unwrap();
+    // Pin and unpin through the untyped map API before using typed arrays.
+    for name in map_names {
+        let map = bpf.map(name).unwrap();
+        let path = directory.path().join(name);
+        map.pin(&path).unwrap();
+        assert!(path.exists());
+        remove_file(path).unwrap();
     }
 
-    let map_1: Array<_, u64> = bpf.take_map("map_1").unwrap().try_into().unwrap();
-    let map_2: Array<_, u64> = bpf.take_map("map_2").unwrap().try_into().unwrap();
-    let map_pin_by_name: Array<_, u64> =
-        bpf.take_map("map_pin_by_name").unwrap().try_into().unwrap();
-
     let prog: &mut UProbe = bpf.program_mut("bpf_prog").unwrap().try_into().unwrap();
     prog.load().unwrap();
     prog.attach(
@@ -148,28 +120,14 @@ fn pin_lifecycle_multiple_btf_maps() {
 
     trigger_bpf_program();
 
-    let key = 0;
-    let val_1 = map_1.get(&key, 0).unwrap();
-    let val_2 = map_2.get(&key, 0).unwrap();
-    let val_3 = map_pin_by_name.get(&key, 0).unwrap();
-
-    assert_eq!(val_1, 24);
-    assert_eq!(val_2, 42);
-    assert_eq!(val_3, 44);
-
-    let map_1_pin_path = Path::new("/sys/fs/bpf/map_1");
-    let map_2_pin_path = Path::new("/sys/fs/bpf/map_2");
-
-    map_1.pin(map_1_pin_path).unwrap();
-    map_2.pin(map_2_pin_path).unwrap();
-    map_pin_by_name.pin(map_pin_by_name_path).unwrap();
-    assert!(map_1_pin_path.exists());
-    assert!(map_2_pin_path.exists());
-    assert!(map_pin_by_name_path.exists());
-
-    remove_file(map_1_pin_path).unwrap();
-    remove_file(map_2_pin_path).unwrap();
-    remove_file(map_pin_by_name_path).unwrap();
+    for (name, expected) in map_names.into_iter().zip([24, 42, 44]) {
+        let map: Array<_, u64> = bpf.map(name).unwrap().try_into().unwrap();
+        assert_eq!(map.get(&0, 0).unwrap(), expected, "{name}");
+        let path = directory.path().join(name);
+        map.pin(&path).unwrap();
+        assert!(path.exists());
+        remove_file(path).unwrap();
+    }
 }
 
 #[unsafe(no_mangle)]
@@ -282,7 +240,7 @@ fn unload_xdp() {
     type P = Xdp;
 
     let program_name = "pass";
-    let attach = |prog: &mut P| prog.attach("lo", XdpMode::default()).unwrap();
+    let attach = |prog: &mut P| prog.attach(c"lo", XdpMode::default()).unwrap();
     run_unload_program_test(
         crate::TEST,
         program_name,
@@ -413,7 +371,7 @@ fn pin_link() {
     type P = Xdp;
 
     let program_name = "pass";
-    let attach = |prog: &mut P| prog.attach("lo", XdpMode::default()).unwrap();
+    let attach = |prog: &mut P| prog.attach(c"lo", XdpMode::default()).unwrap();
 
     let mut bpf = Ebpf::load(crate::TEST).unwrap();
     let prog: &mut P = bpf.program_mut(program_name).unwrap().try_into().unwrap();
@@ -457,10 +415,12 @@ fn pin_tcx_link() {
     prog.load().unwrap();
 
     let link_id = prog
-        .attach_with_options(
-            "lo",
-            TcAttachType::Ingress,
-            TcAttachOptions::TcxOrder(LinkOrder::default()),
+        .attach(
+            c"lo",
+            TcAttach::Tcx {
+                attach_type: TcAttachType::Ingress,
+                order: LinkOrder::default(),
+            },
         )
         .unwrap();
     let link = prog.take_link(link_id).unwrap();
@@ -571,7 +531,7 @@ fn pin_lifecycle() {
     type P = Xdp;
 
     let program_name = "pass";
-    let attach = |prog: &mut P| prog.attach("lo", XdpMode::default()).unwrap();
+    let attach = |prog: &mut P| prog.attach(c"lo", XdpMode::default()).unwrap();
     let program_pin = "/sys/fs/bpf/aya-xdp-test-prog";
     let link_pin = "/sys/fs/bpf/aya-xdp-test-lo";
     let from_pin = |program_pin: &str| P::from_pin(program_pin, XdpAttachType::Interface).unwrap();

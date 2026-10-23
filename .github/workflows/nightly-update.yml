@@ -1,8 +1,9 @@
-name: Update Rust toolchains
+name: Update toolchains and workflow dependencies
 
 on:
   pull_request:
     paths:
+      - .github/workflows/actions.lock
       - .github/workflows/nightly-update.yml
       - .github/workflows/rust-toolchains.yml
       - scripts/rust_toolchains.py
@@ -31,7 +32,8 @@ jobs:
     needs: resolve
     if: >-
       github.ref == format('refs/heads/{0}', github.event.repository.default_branch)
-    runs-on: ubuntu-latest
+    # Code generation requires the MIPS libc headers available in Ubuntu 24.04.
+    runs-on: ubuntu-24.04
     permissions:
       contents: write
       pull-requests: write
@@ -53,14 +55,21 @@ jobs:
       - name: Update the Bazel lockfile
         run: bazel mod deps --lockfile_mode=update
 
-      - uses: ./.github/actions/codegen
+      - uses: $/.github/actions/codegen
         with:
           toolchain: ${{ fromJSON(needs.resolve.outputs.rust-toolchains).nightly.rust }}
 
       - name: Regenerate public API snapshots
         run: cargo xtask public-api --bless
 
-      - name: Create or update the Rust toolchain pull request
+      - name: Refresh locked workflow dependencies
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          gh extension install github/gh-actions-lock --pin v0.2.0
+          gh actions-lock --no-interactive --relock --no-narrow --no-migrate-local-actions
+
+      - name: Create or update the dependency pull request
         id: pull-request
         uses: peter-evans/create-pull-request@v8
         with:
@@ -69,9 +78,9 @@ jobs:
           # Forks use GITHUB_TOKEN and approve their checks manually.
           token: ${{ secrets.CRABBY_GITHUB_TOKEN || github.token }}
           branch: create-pull-request/rust-nightly
-          commit-message: 'build: update Rust ${{ fromJSON(needs.resolve.outputs.rust-toolchains).stable.rust }}, ${{ fromJSON(needs.resolve.outputs.rust-toolchains).nightly.rust }}'
-          title: 'build: update Rust ${{ fromJSON(needs.resolve.outputs.rust-toolchains).stable.rust }}, ${{ fromJSON(needs.resolve.outputs.rust-toolchains).nightly.rust }}'
-          body: Update the Rust stable and nightly pins when needed and regenerate derived files.
+          commit-message: 'build: refresh toolchains and workflow dependencies'
+          title: 'build: refresh toolchains and workflow dependencies'
+          body: Update Rust stable and nightly pins, regenerate derived files, and refresh locked workflow dependencies when needed.
 
       - name: Enable auto-merge
         # Forks do not receive the Crabby token required for auto-merge.

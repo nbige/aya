@@ -2,7 +2,6 @@
 
 use std::{
     convert::Infallible,
-    ffi::CString,
     hash::Hash,
     os::fd::{AsFd as _, AsRawFd as _, BorrowedFd, RawFd},
     path::Path,
@@ -20,8 +19,9 @@ use thiserror::Error;
 use crate::{
     VerifierLogLevel,
     programs::{
-        FdLink, Link, ProgramData, ProgramError, ProgramType, define_link_wrapper, id_as_key,
-        impl_try_from_fdlink, impl_try_into_fdlink, load_program_with_attach_type,
+        FdLink, Link, NetworkInterface, ProgramData, ProgramError, ProgramType,
+        define_link_wrapper, id_as_key, impl_try_from_fdlink, impl_try_into_fdlink,
+        load_program_with_attach_type,
     },
     sys::{
         LinkTarget, NetlinkError, SyscallError, bpf_link_create, bpf_link_update,
@@ -81,7 +81,7 @@ impl XdpMode {
 /// use aya::{Ebpf, programs::{Xdp, XdpMode}};
 ///
 /// let program: &mut Xdp = bpf.program_mut("intercept_packets").unwrap().try_into()?;
-/// program.attach("eth0", XdpMode::default())?;
+/// program.attach(c"eth0", XdpMode::default())?;
 /// # Ok::<(), aya::EbpfError>(())
 /// ```
 #[derive(Debug)]
@@ -101,75 +101,74 @@ impl Xdp {
         load_program_with_attach_type(BPF_PROG_TYPE_XDP, *attach_type, data)
     }
 
-    /// Attaches the program to the given `interface`.
+    /// Attaches the program to an interface specified by name or index.
+    ///
+    /// Pass a name such as `c"eth0"`, an interface index, or a [`NetworkInterface`].
+    ///
+    /// Names are resolved in the calling thread's network namespace at the time of
+    /// this call. Indices are used without an interface lookup and must refer to an
+    /// interface in the same namespace.
     ///
     /// The returned value can be used to detach, see [`Xdp::detach`].
     ///
     /// # Errors
     ///
-    /// If the given `interface` does not exist
+    /// If no interface with the given name exists,
     /// [`ProgramError::UnknownInterface`] is returned.
     ///
-    /// When `bpf_link_create` is unavailable or rejects the request, the call
-    /// transparently falls back to the legacy netlink-based attach path.
-    pub fn attach(&mut self, interface: &str, mode: XdpMode) -> Result<XdpLinkId, ProgramError> {
-        // TODO: avoid this unwrap by adding a new error variant.
-        let c_interface = CString::new(interface).unwrap();
-        let if_index = unsafe { libc::if_nametoindex(c_interface.as_ptr()) };
-        if if_index == 0 {
-            return Err(ProgramError::UnknownInterface {
-                name: interface.to_string(),
-            });
-        }
-        self.attach_to_if_index(if_index, mode)
-    }
-
-    /// Attaches the program to the given interface index.
-    ///
-    /// The returned value can be used to detach, see [`Xdp::detach`].
-    ///
-    /// # Errors
+    /// Other interface lookup failures return [`ProgramError::IOError`].
     ///
     /// When `bpf_link_create` is unavailable or rejects the request, the call
     /// transparently falls back to the legacy netlink-based attach path.
-    pub fn attach_to_if_index(
+    pub fn attach<'a>(
         &mut self,
-        if_index: u32,
+        interface: impl Into<NetworkInterface<'a>>,
         mode: XdpMode,
     ) -> Result<XdpLinkId, ProgramError> {
+        let if_index = interface.into().if_index_for_program()?;
         let Self { data, attach_type } = self;
         let prog_fd = data.fd()?;
         let prog_fd = prog_fd.as_fd();
+        // TODO: Remove this hook when CI runs XDP netlink tests on kernels older than 5.9.
+        let force_netlink = cfg_select! {
+            feature = "test-helpers" => crate::test_helpers::FORCE_NETLINK_XDP.get(),
+            _ => false,
+        };
         let flags = mode.flags();
-        let link = match bpf_link_create(
-            prog_fd,
-            LinkTarget::IfIndex(if_index),
-            *attach_type,
-            flags,
-            None,
-        ) {
-            Ok(link_fd) => XdpLinkInner::Fd(FdLink::new(link_fd)),
-            Err(io_error) => {
-                if io_error.raw_os_error() != Some(libc::EINVAL) {
-                    return Err(ProgramError::SyscallError(SyscallError {
-                        call: "bpf_link_create",
-                        io_error,
-                    }));
+        let link_fd = if force_netlink {
+            None
+        } else {
+            match bpf_link_create(
+                prog_fd,
+                LinkTarget::IfIndex(if_index),
+                *attach_type,
+                flags,
+                None,
+            ) {
+                Ok(link_fd) => Some(link_fd),
+                Err(io_error) => {
+                    if io_error.raw_os_error() != Some(libc::EINVAL) {
+                        return Err(ProgramError::SyscallError(SyscallError {
+                            call: "bpf_link_create",
+                            io_error,
+                        }));
+                    }
+                    None
                 }
-
-                // Fall back to netlink-based attachment.
-
-                let if_index = if_index as i32;
-                netlink_set_xdp_fd(if_index, Some(prog_fd), None, mode)
-                    .map_err(XdpError::NetlinkError)?;
-
-                let prog_fd = prog_fd.as_raw_fd();
-                XdpLinkInner::NlLink(NlLink {
-                    if_index,
-                    prog_fd,
-                    mode,
-                })
             }
+        };
+        let link = if let Some(link_fd) = link_fd {
+            XdpLinkInner::Fd(FdLink::new(link_fd))
+        } else {
+            let if_index = if_index as i32;
+            netlink_set_xdp_fd(if_index, Some(prog_fd), None, mode)
+                .map_err(XdpError::NetlinkError)?;
+
+            XdpLinkInner::NlLink(NlLink {
+                if_index,
+                prog_fd: prog_fd.as_raw_fd(),
+                mode,
+            })
         };
         data.links.insert(XdpLink::new(link))
     }

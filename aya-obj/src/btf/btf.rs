@@ -19,7 +19,7 @@ use crate::{
         relocation::Relocation,
     },
     extern_types::ExternCollection,
-    generated::{btf_ext_header, btf_header},
+    generated::{bpf_core_relo, bpf_func_info, bpf_line_info, btf_ext_header, btf_header},
     util::{HashMap, bytes_of},
 };
 
@@ -1077,6 +1077,9 @@ impl BtfExt {
         };
 
         let btf_ext_header {
+            magic: _,
+            version: _,
+            flags: _,
             hdr_len,
             func_info_off,
             func_info_len,
@@ -1084,29 +1087,35 @@ impl BtfExt {
             line_info_len,
             core_relo_off,
             core_relo_len,
-            ..
         } = header;
 
-        let rec_size = |offset, len| {
-            let section_len = data.len();
-            let offset = hdr_len as usize + offset as usize;
+        let hdr_len = hdr_len as usize;
+        let rec_size = |offset: u32, len: u32, minimum| {
+            let offset = offset as usize;
             let len = len as usize;
-            let data = data
-                .get(offset..offset + len)
-                .ok_or(BtfError::InvalidInfo {
-                    offset,
-                    len,
-                    section_len,
-                })?;
+
+            let section_len = data.len();
+            let offset = hdr_len.checked_add(offset).ok_or(BtfError::InvalidInfo {
+                offset: hdr_len,
+                len: offset,
+                section_len,
+            })?;
+            let invalid = || BtfError::InvalidInfo {
+                offset,
+                len,
+                section_len,
+            };
+            let end = offset.checked_add(len).ok_or_else(invalid)?;
+            let data = data.get(offset..end).ok_or_else(invalid)?;
             Ok(if len == 0 {
                 0
             } else {
-                let (data, _remainder) = data.split_first_chunk().ok_or(BtfError::InvalidInfo {
-                    offset,
-                    len,
-                    section_len,
-                })?;
-                endianness.read_u32(*data) as usize
+                let (data, _remainder) = data.split_first_chunk().ok_or_else(invalid)?;
+                let rec_size = endianness.read_u32(*data) as usize;
+                if rec_size < minimum {
+                    return Err(invalid());
+                }
+                rec_size
             })
         };
 
@@ -1115,9 +1124,9 @@ impl BtfExt {
             relocations: Vec::new(),
             func_info: FuncInfo::new(),
             line_info: LineInfo::new(),
-            func_info_rec_size: rec_size(func_info_off, func_info_len)?,
-            line_info_rec_size: rec_size(line_info_off, line_info_len)?,
-            core_relo_rec_size: rec_size(core_relo_off, core_relo_len)?,
+            func_info_rec_size: rec_size(func_info_off, func_info_len, size_of::<bpf_func_info>())?,
+            line_info_rec_size: rec_size(line_info_off, line_info_len, size_of::<bpf_line_info>())?,
+            core_relo_rec_size: rec_size(core_relo_off, core_relo_len, size_of::<bpf_core_relo>())?,
             data: data.to_vec(),
             _endianness: endianness,
         };
@@ -1126,16 +1135,18 @@ impl BtfExt {
         ext.func_info.data.extend(
             SecInfoIter::new(ext.func_info_data(), ext.func_info_rec_size, endianness)
                 .map(move |sec| {
-                    let name = btf
-                        .string_at(sec.name_offset)
-                        .ok()
-                        .map(String::from)
-                        .unwrap();
+                    let SecInfo {
+                        name_offset,
+                        num_info,
+                        data,
+                    } = sec?;
+                    let name = btf.string_at(name_offset)?;
+                    let name = name.into_owned();
                     let info = FuncSecInfo::parse(
-                        sec.name_offset,
-                        sec.num_info,
+                        name_offset,
+                        num_info,
                         func_info_rec_size,
-                        sec.data,
+                        data,
                         endianness,
                     );
                     Ok((name, info))
@@ -1147,16 +1158,18 @@ impl BtfExt {
         ext.line_info.data.extend(
             SecInfoIter::new(ext.line_info_data(), ext.line_info_rec_size, endianness)
                 .map(move |sec| {
-                    let name = btf
-                        .string_at(sec.name_offset)
-                        .ok()
-                        .map(String::from)
-                        .unwrap();
+                    let SecInfo {
+                        name_offset,
+                        num_info,
+                        data,
+                    } = sec?;
+                    let name = btf.string_at(name_offset)?;
+                    let name = name.into_owned();
                     let info = LineSecInfo::parse(
-                        sec.name_offset,
-                        sec.num_info,
+                        name_offset,
+                        num_info,
                         line_info_rec_size,
-                        sec.data,
+                        data,
                         endianness,
                     );
                     Ok((name, info))
@@ -1168,13 +1181,17 @@ impl BtfExt {
         ext.relocations.extend(
             SecInfoIter::new(ext.core_relo_data(), ext.core_relo_rec_size, endianness)
                 .map(move |sec| {
-                    let relos = sec
-                        .data
+                    let SecInfo {
+                        name_offset,
+                        num_info: _,
+                        data,
+                    } = sec?;
+                    let relos = data
                         .chunks(rec_size)
                         .enumerate()
                         .map(|(n, rec)| unsafe { Relocation::parse(rec, n) })
                         .collect::<Result<Vec<_>, _>>()?;
-                    Ok((sec.name_offset, relos))
+                    Ok((name_offset, relos))
                 })
                 .collect::<Result<Vec<_>, _>>()?,
         );
@@ -1183,7 +1200,8 @@ impl BtfExt {
     }
 
     fn info_data(&self, offset: u32, len: u32) -> &[u8] {
-        let offset = (self.header.hdr_len + offset) as usize;
+        // The subsection bounds were validated by `parse` in usize arithmetic.
+        let offset = self.header.hdr_len as usize + offset as usize;
         let data = &self.data[offset..offset + len as usize];
         if len > 0 {
             // skip `rec_size`
@@ -1235,7 +1253,7 @@ impl<'a> SecInfoIter<'a> {
 }
 
 impl<'a> Iterator for SecInfoIter<'a> {
-    type Item = SecInfo<'a>;
+    type Item = Result<SecInfo<'a>, BtfError>;
 
     fn next(&mut self) -> Option<Self::Item> {
         let Self {
@@ -1244,31 +1262,43 @@ impl<'a> Iterator for SecInfoIter<'a> {
             endianness,
         } = self;
 
-        loop {
-            let remainder = *data;
+        // Taking the remainder makes an error terminal, like exhaustion.
+        let remainder = mem::take(data);
+        if remainder.is_empty() {
+            return None;
+        }
 
-            let (name_offset, remainder) = remainder.split_first_chunk()?;
+        Some((|| {
+            let section_len = remainder.len();
+            let invalid_header = || BtfError::InvalidInfo {
+                offset: 0,
+                len: 8,
+                section_len,
+            };
+            let (name_offset, remainder) =
+                remainder.split_first_chunk().ok_or_else(invalid_header)?;
             let name_offset = endianness.read_u32(*name_offset);
-
-            let (num_info, remainder) = remainder.split_first_chunk()?;
+            let (num_info, remainder) = remainder.split_first_chunk().ok_or_else(invalid_header)?;
             let num_info = endianness.read_u32(*num_info);
-
-            let (section_data, remainder) = remainder.split_at_checked(
-                *rec_size * usize::try_from(num_info).expect("u32 fits in usize"),
-            )?;
-
+            let count = usize::try_from(num_info).expect("u32 fits in usize");
+            let invalid = || BtfError::InvalidInfo {
+                offset: 8,
+                len: rec_size.saturating_mul(count),
+                section_len,
+            };
+            if num_info == 0 || *rec_size == 0 {
+                return Err(invalid());
+            }
+            let len = rec_size.checked_mul(count).ok_or_else(invalid)?;
+            let (section_data, remainder) = remainder.split_at_checked(len).ok_or_else(invalid)?;
             *data = remainder;
 
-            if section_data.is_empty() {
-                continue;
-            }
-
-            break Some(SecInfo {
+            Ok(SecInfo {
                 name_offset,
                 num_info,
                 data: section_data,
-            });
-        }
+            })
+        })())
     }
 }
 
@@ -1352,6 +1382,7 @@ pub(crate) struct SecInfo<'a> {
 #[cfg(test)]
 mod tests {
     use assert_matches::assert_matches;
+    use rstest::rstest;
 
     use super::*;
     use crate::btf::{BtfParam, DeclTag, Float, Func, FuncProto, Ptr, TypeTag};
@@ -1513,6 +1544,243 @@ mod tests {
         assert_eq!(btf.type_size(ptr).unwrap(), size_of::<&()>());
     }
 
+    #[test]
+    fn test_btf_string_offsets() {
+        let mut btf = Btf::new();
+        let name = btf.add_string("foo");
+        let btf = Btf::parse(&btf.to_bytes(), Endianness::default()).unwrap();
+        assert_eq!(btf.string_at(0).unwrap(), "");
+        assert_eq!(btf.string_at(name).unwrap(), "foo");
+        for offset in [
+            btf.strings.len() as u32,
+            btf.strings.len() as u32 + 1,
+            u32::MAX,
+        ] {
+            assert_matches!(
+                btf.string_at(offset),
+                Err(BtfError::InvalidStringOffset { offset: actual }) => {
+                    assert_eq!(actual, offset as usize);
+                }
+            );
+        }
+    }
+
+    fn btf_ext_with_sections(sections: [&[u8]; 3]) -> Vec<u8> {
+        let [func, line, core] = sections;
+        let func_info_len = func.len() as u32;
+        let line_info_len = line.len() as u32;
+        let header = btf_ext_header {
+            magic: 0xeb9f,
+            version: 1,
+            flags: 0,
+            hdr_len: size_of::<btf_ext_header>() as u32,
+            func_info_off: 0,
+            func_info_len,
+            line_info_off: func_info_len,
+            line_info_len,
+            core_relo_off: func_info_len + line_info_len,
+            core_relo_len: core.len() as u32,
+        };
+        // SAFETY: btf_ext_header contains initialized integer fields without padding.
+        let mut data = unsafe { bytes_of(&header) }.to_vec();
+        for section in sections {
+            data.extend_from_slice(section);
+        }
+        data
+    }
+
+    #[rstest]
+    #[case::func(0, 8)]
+    #[case::line(1, 16)]
+    fn test_btf_ext_invalid_section_name(#[case] section: usize, #[case] rec_size: u32) {
+        let mut records: Vec<_> = [rec_size, 1, 1]
+            .into_iter()
+            .flat_map(u32::to_ne_bytes)
+            .collect();
+        records.resize(records.len() + rec_size as usize, 0);
+        let mut sections = [&[][..]; 3];
+        sections[section] = &records;
+        let data = btf_ext_with_sections(sections);
+        assert_matches!(
+            BtfExt::parse(&data, Endianness::default(), &Btf::new()),
+            Err(BtfError::InvalidStringOffset { offset: 1 })
+        );
+    }
+
+    #[rstest]
+    #[case::func(0, 8)]
+    #[case::line(1, 16)]
+    #[case::core(2, 16)]
+    fn test_btf_ext_short_records(#[case] section: usize, #[case] minimum: u32) {
+        for rec_size in (0..minimum).rev() {
+            let mut records: Vec<_> = [rec_size, 0, 1]
+                .into_iter()
+                .flat_map(u32::to_ne_bytes)
+                .collect();
+            records.resize(records.len() + rec_size as usize, 0);
+            let mut sections = [&[][..]; 3];
+            sections[section] = &records;
+            let data = btf_ext_with_sections(sections);
+            assert_matches!(
+                BtfExt::parse(&data, Endianness::default(), &Btf::new()),
+                Err(BtfError::InvalidInfo {
+                    offset: 32,
+                    len: _,
+                    section_len: _
+                })
+            );
+        }
+    }
+
+    #[rstest]
+    fn test_btf_ext_record_sizes(#[values(0, 4)] extra: u32) {
+        let func: Vec<_> = [8 + extra, 0, 1, 16, 42]
+            .into_iter()
+            .chain(std::iter::repeat_n(0, extra as usize / 4))
+            .flat_map(u32::to_ne_bytes)
+            .collect();
+        let line: Vec<_> = [16 + extra, 0, 1, 24, 1, 2, 3]
+            .into_iter()
+            .chain(std::iter::repeat_n(0, extra as usize / 4))
+            .flat_map(u32::to_ne_bytes)
+            .collect();
+        let data = btf_ext_with_sections([&func, &line, &[]]);
+        let ext = BtfExt::parse(&data, Endianness::default(), &Btf::new()).unwrap();
+        let FuncSecInfo {
+            _sec_name_offset: _,
+            num_info,
+            func_info,
+        } = &ext.func_info.data[""];
+        assert_eq!(*num_info, 1);
+        assert_matches!(func_info.as_slice(), [func] => {
+            assert_eq!(func.insn_off, 2);
+            assert_eq!(func.type_id, 42);
+        });
+        let LineSecInfo {
+            _sec_name_offset: _,
+            num_info,
+            line_info,
+        } = &ext.line_info.data[""];
+        assert_eq!(*num_info, 1);
+        assert_matches!(line_info.as_slice(), [line] => {
+            assert_eq!(line.insn_off, 3);
+            assert_eq!(line.file_name_off, 1);
+            assert_eq!(line.line_off, 2);
+            assert_eq!(line.line_col, 3);
+        });
+    }
+
+    #[test]
+    fn test_btf_ext_invalid_subsection_offset() {
+        let mut data = btf_ext_with_sections([&[], &[], &[]]);
+        data[8..12].copy_from_slice(&u32::MAX.to_ne_bytes());
+        assert_matches!(
+            BtfExt::parse(&data, Endianness::default(), &Btf::new()),
+            Err(BtfError::InvalidInfo {
+                offset: _,
+                len: _,
+                section_len: 32
+            })
+        );
+    }
+
+    #[rstest]
+    #[case::func(0, 8)]
+    #[case::line(1, 16)]
+    #[case::core(2, 16)]
+    fn test_btf_ext_oversized_count(#[case] section: usize, #[case] rec_size: u32) {
+        let records: Vec<_> = [rec_size, 0, u32::MAX, 0]
+            .into_iter()
+            .flat_map(u32::to_ne_bytes)
+            .collect();
+        let mut sections = [&[][..]; 3];
+        sections[section] = &records;
+        let data = btf_ext_with_sections(sections);
+        assert_matches!(
+            BtfExt::parse(&data, Endianness::default(), &Btf::new()),
+            Err(BtfError::InvalidInfo {
+                offset: 8,
+                len: _,
+                section_len: 12
+            })
+        );
+    }
+
+    #[rstest]
+    fn test_btf_ext_section_endianness(
+        #[values(Endianness::Little, Endianness::Big)] endianness: Endianness,
+    ) {
+        let data: Vec<_> = [7, 2, 1, 2, 3, 4]
+            .into_iter()
+            .flat_map(|value| endianness.write_u32(value))
+            .collect();
+        let mut iter = SecInfoIter::new(&data, 8, endianness);
+        assert_matches!(iter.next(), Some(Ok(SecInfo { name_offset, num_info, data: records })) => {
+            assert_eq!(name_offset, 7);
+            assert_eq!(num_info, 2);
+            assert_eq!(records, &data[8..]);
+        });
+        assert_matches!(iter.next(), None);
+    }
+
+    #[rstest]
+    fn test_btf_ext_truncated_section_header(#[values(false, true)] after_record: bool) {
+        for len in 1..8 {
+            let mut data = Vec::new();
+            if after_record {
+                data.extend([0, 1, 0, 0].into_iter().flat_map(u32::to_ne_bytes));
+            }
+            data.resize(data.len() + len, 0);
+            let mut iter = SecInfoIter::new(&data, 8, Endianness::default());
+            if after_record {
+                assert_matches!(
+                    iter.next(),
+                    Some(Ok(SecInfo {
+                        name_offset: 0,
+                        num_info: 1,
+                        data: _
+                    }))
+                );
+            }
+            assert_matches!(iter.next(), Some(Err(BtfError::InvalidInfo { offset: 0, len: 8, section_len })) => {
+                assert_eq!(section_len, len);
+            });
+            assert_matches!(iter.next(), None);
+        }
+    }
+
+    #[rstest]
+    #[case::zero_count(8, 0, 0)]
+    #[case::zero_size(0, 1, 0)]
+    #[case::overflow(usize::MAX, 2, usize::MAX)]
+    fn test_btf_ext_invalid_record_count(
+        #[case] rec_size: usize,
+        #[case] count: u32,
+        #[case] len: usize,
+    ) {
+        let data: Vec<_> = [0, count].into_iter().flat_map(u32::to_ne_bytes).collect();
+        let mut iter = SecInfoIter::new(&data, rec_size, Endianness::default());
+        assert_matches!(iter.next(), Some(Err(BtfError::InvalidInfo { offset: 8, len: actual_len, section_len: 8 })) => {
+            assert_eq!(actual_len, len);
+        });
+        assert_matches!(iter.next(), None);
+    }
+
+    #[test]
+    fn test_btf_ext_truncated_record() {
+        let data: Vec<_> = [0, 1, 0].into_iter().flat_map(u32::to_ne_bytes).collect();
+        let mut iter = SecInfoIter::new(&data, 8, Endianness::default());
+        assert_matches!(
+            iter.next(),
+            Some(Err(BtfError::InvalidInfo {
+                offset: 8,
+                len: 8,
+                section_len: 12
+            }))
+        );
+        assert_matches!(iter.next(), None);
+    }
+
     fn supports<const N: usize>(supported: [BtfFeature; N]) -> impl Fn(BtfFeature) -> bool {
         move |feature| supported.contains(&feature)
     }
@@ -1608,8 +1876,8 @@ mod tests {
     fn test_parse_btf() {
         // this generated BTF data is from an XDP program that simply returns XDP_PASS
         // compiled using clang
-        let data: &[u8] = if cfg!(target_endian = "little") {
-            &[
+        let data: &[u8] = cfg_select! {
+            target_endian = "little" => &[
                 0x9f, 0xeb, 0x01, 0x00, 0x18, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x0c, 0x01,
                 0x00, 0x00, 0x0c, 0x01, 0x00, 0x00, 0xe1, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00,
                 0x00, 0x00, 0x00, 0x02, 0x02, 0x00, 0x00, 0x00, 0x01, 0x00, 0x00, 0x00, 0x06, 0x00,
@@ -1647,9 +1915,8 @@ mod tests {
                 0x68, 0x61, 0x72, 0x00, 0x5f, 0x5f, 0x41, 0x52, 0x52, 0x41, 0x59, 0x5f, 0x53, 0x49,
                 0x5a, 0x45, 0x5f, 0x54, 0x59, 0x50, 0x45, 0x5f, 0x5f, 0x00, 0x5f, 0x6c, 0x69, 0x63,
                 0x65, 0x6e, 0x73, 0x65, 0x00, 0x6c, 0x69, 0x63, 0x65, 0x6e, 0x73, 0x65, 0x00,
-            ]
-        } else {
-            &[
+            ],
+            target_endian = "big" => &[
                 0xeb, 0x9f, 0x01, 0x00, 0x00, 0x00, 0x00, 0x18, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00,
                 0x01, 0x0c, 0x00, 0x00, 0x01, 0x0c, 0x00, 0x00, 0x00, 0xe1, 0x00, 0x00, 0x00, 0x00,
                 0x02, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x02, 0x00, 0x00, 0x00, 0x01, 0x04, 0x00,
@@ -1687,7 +1954,7 @@ mod tests {
                 0x68, 0x61, 0x72, 0x00, 0x5f, 0x5f, 0x41, 0x52, 0x52, 0x41, 0x59, 0x5f, 0x53, 0x49,
                 0x5a, 0x45, 0x5f, 0x54, 0x59, 0x50, 0x45, 0x5f, 0x5f, 0x00, 0x5f, 0x6c, 0x69, 0x63,
                 0x65, 0x6e, 0x73, 0x65, 0x00, 0x6c, 0x69, 0x63, 0x65, 0x6e, 0x73, 0x65, 0x00,
-            ]
+            ],
         };
         assert_eq!(data.len(), 517);
         let btf = Btf::parse(data, Endianness::default()).unwrap();

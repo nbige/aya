@@ -20,7 +20,11 @@
 //!
 //! // start reading aya-log records and log them using the default logger
 //! let logger = EbpfLogger::init(&mut bpf).unwrap();
-//! let mut logger = tokio::io::unix::AsyncFd::with_interest(logger, tokio::io::Interest::READABLE).unwrap();
+//! // SAFETY: The logger owns its map FD, and flushing does not close or replace it.
+//! let mut logger = unsafe {
+//!     tokio::io::unix::AsyncFd::register_with_interest(logger, tokio::io::Interest::READABLE)
+//! }
+//! .unwrap();
 //! tokio::task::spawn(async move {
 //!     loop {
 //!         let mut guard = logger.readable_mut().await.unwrap();
@@ -776,7 +780,7 @@ fn log_buf<T: ?Sized + Log>(mut buf: &[u8], logger: &T) -> Result<(), ()> {
                 let value = value
                     .try_into()
                     .map_err(|std::array::TryFromSliceError { .. }| ())?;
-                let ptr = usize::from_ne_bytes(value) as *const ();
+                let ptr = ptr::without_provenance::<()>(usize::from_ne_bytes(value));
                 full_log_msg.push_str(&ptr.format(last_hint.take())?);
             }
         }

@@ -1109,7 +1109,7 @@ struct ProcMapEntry<'a> {
     #[cfg_attr(not(test), expect(dead_code, reason = "parsed but not exposed"))]
     dev: &'a OsStr,
     #[cfg_attr(not(test), expect(dead_code, reason = "parsed but not exposed"))]
-    inode: u32,
+    inode: u64,
     path: Option<&'a OsStr>,
 }
 
@@ -1842,7 +1842,7 @@ mod tests {
             vec.resize(total_size, 0);
         }
 
-        let ptr = vec.as_ptr() as usize;
+        let ptr = vec.as_ptr().addr();
 
         let aligned_ptr = ptr.next_multiple_of(alignment);
 
@@ -1915,7 +1915,7 @@ mod tests {
         perms: &'static str,
         offset: u64,
         dev: &'static str,
-        inode: u32,
+        inode: u64,
         path: Option<&'static str>,
     }
 
@@ -2019,6 +2019,19 @@ mod tests {
             dev: "00:01",
             inode: 7215,
             path: Some("/dev/ashmem/CursorWindow: /data/user/0/package/databases/kitefly.db (deleted)"),
+        })]
+    // Inode numbers are 64-bit; some filesystems (e.g. overlayfs, remote build sandboxes) hand
+    // out values that do not fit in 32 bits.
+    #[case::inode_exceeds_u32(
+        b"5a033ec5f000-5a033ed35000 r--p 00000000 09:00 8053333832                 /usr/bin/foo",
+        ExpectedProcMapEntry {
+            address: 0x5a033ec5f000,
+            address_end: 0x5a033ed35000,
+            perms: "r--p",
+            offset: 0,
+            dev: "09:00",
+            inode: 8053333832,
+            path: Some("/usr/bin/foo"),
         })]
     fn test_parse_proc_map_entry_ok(
         #[case] line: &'static [u8],
