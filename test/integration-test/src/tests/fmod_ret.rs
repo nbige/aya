@@ -99,12 +99,11 @@ fn fmod_ret_overrides_or_runs_the_target_and_preserves_fexit() {
 
 #[test]
 fn fmod_ret_sign_extends_errno_for_long_syscall_targets() {
-    let target =
-        cfg_select! {
-            target_arch = "x86_64" => Some(("__x64_sys_getpgid", KernelVersion::new(5, 7, 0))),
-            target_arch = "aarch64" => Some(("__arm64_sys_getpgid", KernelVersion::new(6, 0, 0))),
-            _ => None,
-        };
+    let target = cfg_select! {
+        target_arch = "x86_64" => Some(("__x64_sys_getpgid", KernelVersion::new(5, 7, 0))),
+        target_arch = "aarch64" => Some(("__arm64_sys_getpgid", KernelVersion::new(6, 0, 0))),
+        _ => None,
+    };
     let Some((target, minimum)) = target else {
         eprintln!("skipping long syscall modifier on an unsupported architecture");
         return;
@@ -137,7 +136,20 @@ fn fmod_ret_sign_extends_errno_for_long_syscall_targets() {
         .unwrap()
         .try_into()
         .unwrap();
-    modifier.load(target, &btf).unwrap();
+    let config = procfs::kernel_config().unwrap();
+    let result = modifier.load(target, &btf);
+    // Syscall wrappers enter the error-injection list only with this option enabled.
+    // https://github.com/torvalds/linux/blob/7d0a66e4b/include/asm-generic/error-injection.h
+    if !matches!(
+        config.get("CONFIG_FUNCTION_ERROR_INJECTION"),
+        Some(procfs::ConfigSetting::Yes)
+    ) {
+        assert_matches!(result, Err(ProgramError::LoadError { io_error, .. }) => {
+            assert_eq!(io_error.raw_os_error(), Some(libc::EINVAL));
+        });
+        return;
+    }
+    result.unwrap();
     let result = modifier.attach();
     let attach_supported = cfg_select! {
         target_arch = "aarch64" => version >= KernelVersion::new(6, 4, 0),
