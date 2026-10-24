@@ -585,7 +585,7 @@ mod tests {
     fn test_from_owned_fd_reads_samples_without_opening_an_event() {
         use std::{io::Read as _, os::unix::net::UnixStream};
         let mut mmapped_buf = mmapped_buf();
-        write_sample(&mut mmapped_buf, 0, 0xCAFEBABE_u32);
+        write_sample(&mut mmapped_buf, 0, 0xCAFEBABEu32);
         fake_mmap(&mut mmapped_buf);
         override_syscall(|call| match call {
             Syscall::PerfEventIoctl { .. } => Ok(0),
@@ -603,18 +603,18 @@ mod tests {
         });
         assert_eq!(samples, [0xCAFEBABE]);
         drop(buffer);
-        assert_eq!(peer.read(&mut [0_u8; 1]).unwrap(), 0);
+        assert_eq!(peer.read(&mut [0u8; 1]).unwrap(), 0);
     }
 
     #[test]
     fn test_from_owned_fd_rejects_invalid_sizes_and_closes_the_descriptor() {
         use std::{io::Read as _, os::unix::net::UnixStream};
-        for pages in [0, 3, 1_usize << (usize::BITS - 1)] {
+        for pages in [0, 3, 1usize << (usize::BITS - 1)] {
             let (fd, mut peer) = UnixStream::pair().unwrap();
             // SAFETY: size validation rejects the descriptor before any mmap or event access.
             let result = unsafe { PerfEventArrayBuffer::from_owned_fd(fd.into(), pages) };
             assert_matches!(result, Err(PerfBufferError::InvalidPageCount { .. }));
-            assert_eq!(peer.read(&mut [0_u8; 1]).unwrap(), 0);
+            assert_eq!(peer.read(&mut [0u8; 1]).unwrap(), 0);
         }
     }
 
@@ -638,7 +638,7 @@ mod tests {
         // SAFETY: the mocked mmap supplies an exclusive BPF-output buffer; enable fails before it is consumed.
         let result = unsafe { PerfEventArrayBuffer::from_owned_fd(fd.into(), 1) };
         assert_matches!(result, Err(PerfBufferError::PerfEventEnableError { .. }));
-        assert_eq!(peer.read(&mut [0_u8; 1]).unwrap(), 0);
+        assert_eq!(peer.read(&mut [0u8; 1]).unwrap(), 0);
     }
 
     // The `write` helper sets `data_head` to the post-write absolute byte
