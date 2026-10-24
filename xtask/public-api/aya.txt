@@ -562,6 +562,7 @@ pub struct aya::maps::perf::PerfEventArrayBuffer
 impl aya::maps::perf::PerfEventArrayBuffer
 pub fn aya::maps::perf::PerfEventArrayBuffer::fold<C, F>(&mut self, C, F) -> C where F: core::ops::function::FnMut(C, aya::maps::perf::PerfEvent<'_>) -> C
 pub fn aya::maps::perf::PerfEventArrayBuffer::for_each<F>(&mut self, F) where F: core::ops::function::FnMut(aya::maps::perf::PerfEvent<'_>)
+pub unsafe fn aya::maps::perf::PerfEventArrayBuffer::from_owned_fd(std::os::fd::owned::OwnedFd, usize) -> core::result::Result<Self, aya::maps::perf::PerfBufferError>
 pub fn aya::maps::perf::PerfEventArrayBuffer::open(u32, usize) -> core::result::Result<Self, aya::maps::perf::PerfBufferError>
 pub fn aya::maps::perf::PerfEventArrayBuffer::readable(&self) -> bool
 pub fn aya::maps::perf::PerfEventArrayBuffer::try_fold<B, C, F>(&mut self, C, F) -> core::ops::control_flow::ControlFlow<B, C> where F: core::ops::function::FnMut(C, aya::maps::perf::PerfEvent<'_>) -> core::ops::control_flow::ControlFlow<B, C>

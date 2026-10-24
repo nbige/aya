@@ -2,7 +2,7 @@ use std::{
     convert::Infallible,
     io,
     ops::ControlFlow,
-    os::fd::{AsFd, AsRawFd, BorrowedFd, RawFd},
+    os::fd::{AsFd, AsRawFd, BorrowedFd, OwnedFd, RawFd},
     ptr::{self, NonNull},
     slice,
     sync::atomic::{self, Ordering},
@@ -113,11 +113,7 @@ impl PerfEventArrayBuffer {
     /// Returns [`PerfBufferError`] if `page_count` is invalid, or if the perf
     /// event array buffer cannot be opened, mapped, or enabled.
     pub fn open(cpu: u32, page_count: usize) -> Result<Self, PerfBufferError> {
-        if !page_count.is_power_of_two() {
-            return Err(PerfBufferError::InvalidPageCount { page_count });
-        }
-
-        let page_size = page_size();
+        let (page_size, size) = Self::mapping_size(page_count)?;
         let fd = perf_event_open(
             PerfEventConfig::Software(SoftwareEvent::BpfOutput),
             PerfEventScope::AllProcessesOneCpu { cpu },
@@ -127,7 +123,50 @@ impl PerfEventArrayBuffer {
             PERF_FLAG_FD_CLOEXEC,
         )
         .map_err(|io_error| PerfBufferError::OpenError { io_error })?;
-        let size = page_size * page_count;
+        Self::map_and_enable(fd, page_size, size)
+    }
+
+    /// Adopts an existing BPF-output perf event without calling `perf_event_open`.
+    ///
+    /// This transfers descriptor ownership. The buffer disables the event and
+    /// closes the descriptor when dropped. Errors also release the descriptor.
+    /// The event must be inserted into a perf event array before producers write.
+    ///
+    /// # Safety
+    ///
+    /// For a valid page count, `fd` must refer to a perf event configured as
+    /// `PERF_TYPE_SOFTWARE` / `PERF_COUNT_SW_BPF_OUTPUT`, with `PERF_SAMPLE_RAW`
+    /// as its only sample field and no side-band record flags. The caller must
+    /// ensure that no other consumer reads or changes this ring's `data_tail`
+    /// for the returned buffer's lifetime. The inherited producer format must
+    /// remain unchanged until the buffer is dropped.
+    ///
+    /// # Errors
+    ///
+    /// Returns [`PerfBufferError`] for an invalid or unrepresentable page count,
+    /// a failed mapping, or a failed enable ioctl.
+    pub unsafe fn from_owned_fd(fd: OwnedFd, page_count: usize) -> Result<Self, PerfBufferError> {
+        let (page_size, size) = Self::mapping_size(page_count)?;
+        Self::map_and_enable(fd.into(), page_size, size)
+    }
+
+    fn mapping_size(page_count: usize) -> Result<(usize, usize), PerfBufferError> {
+        let page_size = page_size();
+        if !page_count.is_power_of_two() {
+            return Err(PerfBufferError::InvalidPageCount { page_count });
+        }
+        let size = page_size
+            .checked_mul(page_count)
+            .filter(|size| size.checked_add(page_size).is_some())
+            .ok_or(PerfBufferError::InvalidPageCount { page_count })?;
+        Ok((page_size, size))
+    }
+
+    fn map_and_enable(
+        fd: crate::MockableFd,
+        page_size: usize,
+        size: usize,
+    ) -> Result<Self, PerfBufferError> {
         let mmap = MMap::new(
             fd.as_fd(),
             size + page_size,
@@ -499,8 +538,8 @@ mod tests {
         assert_eq!(payloads, expected);
     }
 
-    #[test]
-    fn test_for_each_lost() {
+    #[rstest]
+    fn test_for_each_lost(#[values(false, true)] adopt: bool) {
         #[repr(C)]
         #[derive(Debug)]
         struct LostSamples {
@@ -526,7 +565,13 @@ mod tests {
         );
 
         fake_mmap(&mut mmapped_buf);
-        let mut buf = PerfEventArrayBuffer::open(1, 1).unwrap();
+        let mut buf = if adopt {
+            let (fd, _peer) = std::os::unix::net::UnixStream::pair().unwrap();
+            // SAFETY: fake_mmap supplies the exclusive RAW-format BPF-output ring used by this test.
+            unsafe { PerfEventArrayBuffer::from_owned_fd(fd.into(), 1) }.unwrap()
+        } else {
+            PerfEventArrayBuffer::open(1, 1).unwrap()
+        };
 
         let mut events = Vec::new();
         buf.for_each(|event| match event {
@@ -534,6 +579,66 @@ mod tests {
             PerfEvent::Lost { count } => events.push(count),
         });
         assert_eq!(events, [0xCAFEBABE]);
+    }
+
+    #[test]
+    fn test_from_owned_fd_reads_samples_without_opening_an_event() {
+        use std::{io::Read as _, os::unix::net::UnixStream};
+        let mut mmapped_buf = mmapped_buf();
+        write_sample(&mut mmapped_buf, 0, 0xCAFEBABE_u32);
+        fake_mmap(&mut mmapped_buf);
+        override_syscall(|call| match call {
+            Syscall::PerfEventIoctl { .. } => Ok(0),
+            other => panic!("adoption must not open a perf event: {other:?}"),
+        });
+        let (fd, mut peer) = UnixStream::pair().unwrap();
+        // SAFETY: the mocked mmap provides one exclusively consumed, correctly formatted BPF-output buffer.
+        let mut buffer = unsafe { PerfEventArrayBuffer::from_owned_fd(fd.into(), 1) }.unwrap();
+        let mut samples = Vec::new();
+        buffer.for_each(|event| match event {
+            PerfEvent::Sample { head, tail } => {
+                samples.push(u32_from_buf(&sample_bytes(head, tail)))
+            }
+            PerfEvent::Lost { count } => panic!("unexpected loss: {count}"),
+        });
+        assert_eq!(samples, [0xCAFEBABE]);
+        drop(buffer);
+        assert_eq!(peer.read(&mut [0_u8; 1]).unwrap(), 0);
+    }
+
+    #[test]
+    fn test_from_owned_fd_rejects_invalid_sizes_and_closes_the_descriptor() {
+        use std::{io::Read as _, os::unix::net::UnixStream};
+        for pages in [0, 3, 1_usize << (usize::BITS - 1)] {
+            let (fd, mut peer) = UnixStream::pair().unwrap();
+            // SAFETY: size validation rejects the descriptor before any mmap or event access.
+            let result = unsafe { PerfEventArrayBuffer::from_owned_fd(fd.into(), pages) };
+            assert_matches!(result, Err(PerfBufferError::InvalidPageCount { .. }));
+            assert_eq!(peer.read(&mut [0_u8; 1]).unwrap(), 0);
+        }
+    }
+
+    #[test]
+    fn test_from_owned_fd_enable_failure_releases_the_descriptor() {
+        use std::{io::Read as _, os::unix::net::UnixStream};
+        let mut mmapped_buf = mmapped_buf();
+        fake_mmap(&mut mmapped_buf);
+        override_syscall(|call| match call {
+            Syscall::PerfEventIoctl {
+                request: PerfEventIoctlRequest::Enable { .. },
+                ..
+            } => Err((-1, io::Error::from_raw_os_error(libc::EPERM))),
+            Syscall::PerfEventIoctl {
+                request: PerfEventIoctlRequest::Disable { .. },
+                ..
+            } => Ok(0),
+            other => panic!("unexpected syscall during adoption: {other:?}"),
+        });
+        let (fd, mut peer) = UnixStream::pair().unwrap();
+        // SAFETY: the mocked mmap supplies an exclusive BPF-output buffer; enable fails before it is consumed.
+        let result = unsafe { PerfEventArrayBuffer::from_owned_fd(fd.into(), 1) };
+        assert_matches!(result, Err(PerfBufferError::PerfEventEnableError { .. }));
+        assert_eq!(peer.read(&mut [0_u8; 1]).unwrap(), 0);
     }
 
     // The `write` helper sets `data_head` to the post-write absolute byte
