@@ -269,7 +269,11 @@ impl Func {
         }
     }
 
-    pub(crate) fn linkage(&self) -> FuncLinkage {
+    pub const fn proto(&self) -> u32 {
+        self.btf_type
+    }
+
+    pub fn linkage(&self) -> FuncLinkage {
         (self.info & 0xFFFF).into()
     }
 
@@ -341,6 +345,10 @@ pub struct Int {
 }
 
 impl Int {
+    pub const fn size(&self) -> u32 {
+        self.size
+    }
+
     pub(crate) fn to_bytes(&self) -> Vec<u8> {
         let Self {
             name_offset,
@@ -378,17 +386,15 @@ impl Int {
         }
     }
 
-    pub(crate) fn encoding(&self) -> IntEncoding {
+    pub fn encoding(&self) -> IntEncoding {
         ((self.data & 0x0f000000) >> 24).into()
     }
 
-    pub(crate) const fn offset(&self) -> u32 {
+    pub const fn offset(&self) -> u32 {
         (self.data & 0x00ff0000) >> 16
     }
 
-    // TODO: Remove directive this when this crate is pub
-    #[cfg(test)]
-    pub(crate) const fn bits(&self) -> u32 {
+    pub const fn bits(&self) -> u32 {
         self.data & 0x000000ff
     }
 }
@@ -416,6 +422,14 @@ pub struct Enum {
 }
 
 impl Enum {
+    pub const fn size(&self) -> u32 {
+        self.size
+    }
+
+    pub fn variants(&self) -> &[BtfEnum] {
+        &self.variants
+    }
+
     pub(crate) fn to_bytes(&self) -> Vec<u8> {
         let Self {
             name_offset,
@@ -459,7 +473,7 @@ impl Enum {
         }
     }
 
-    pub(crate) const fn is_signed(&self) -> bool {
+    pub const fn is_signed(&self) -> bool {
         self.info >> 31 == 1
     }
 
@@ -481,6 +495,14 @@ pub struct BtfEnum64 {
 }
 
 impl BtfEnum64 {
+    pub const fn name_offset(&self) -> u32 {
+        self.name_offset
+    }
+
+    pub const fn value(&self) -> u64 {
+        ((self.value_high as u64) << 32) | self.value_low as u64
+    }
+
     pub const fn new(name_offset: u32, value: u64) -> Self {
         Self {
             name_offset,
@@ -500,6 +522,14 @@ pub struct Enum64 {
 }
 
 impl Enum64 {
+    pub const fn size(&self) -> u32 {
+        self.size
+    }
+
+    pub fn variants(&self) -> &[BtfEnum64] {
+        &self.variants
+    }
+
     pub(crate) fn to_bytes(&self) -> Vec<u8> {
         let Self {
             name_offset,
@@ -539,7 +569,7 @@ impl Enum64 {
         size_of::<Fwd>() + size_of::<BtfEnum64>() * self.variants.len()
     }
 
-    pub(crate) const fn is_signed(&self) -> bool {
+    pub const fn is_signed(&self) -> bool {
         self.info >> 31 == 1
     }
 
@@ -566,10 +596,25 @@ impl Enum64 {
 
 #[repr(C)]
 #[derive(Clone, Debug)]
-pub(crate) struct BtfMember {
+pub struct BtfMember {
     pub(crate) name_offset: u32,
     pub(crate) btf_type: u32,
     pub(crate) offset: u32,
+}
+
+impl BtfMember {
+    pub const fn name_offset(&self) -> u32 {
+        self.name_offset
+    }
+
+    pub const fn btf_type(&self) -> u32 {
+        self.btf_type
+    }
+
+    /// Returns the raw offset encoding; use the containing type to decode bitfields.
+    pub const fn offset(&self) -> u32 {
+        self.offset
+    }
 }
 
 #[repr(C)]
@@ -582,6 +627,14 @@ pub struct Struct {
 }
 
 impl Struct {
+    pub const fn size(&self) -> u32 {
+        self.size
+    }
+
+    pub fn members(&self) -> &[BtfMember] {
+        &self.members
+    }
+
     pub(crate) fn to_bytes(&self) -> Vec<u8> {
         let Self {
             name_offset,
@@ -678,6 +731,14 @@ pub struct Union {
 }
 
 impl Union {
+    pub const fn size(&self) -> u32 {
+        self.size
+    }
+
+    pub fn members(&self) -> &[BtfMember] {
+        &self.members
+    }
+
     pub(crate) const fn new(
         name_offset: u32,
         size: u32,
@@ -773,6 +834,22 @@ pub struct Array {
 }
 
 impl Array {
+    pub const fn element_type(&self) -> u32 {
+        self.array.element_type
+    }
+
+    pub const fn index_type(&self) -> u32 {
+        self.array.index_type
+    }
+
+    pub const fn len(&self) -> u32 {
+        self.array.len
+    }
+
+    pub const fn is_empty(&self) -> bool {
+        self.array.len == 0
+    }
+
     pub(crate) fn to_bytes(&self) -> Vec<u8> {
         let Self {
             name_offset,
@@ -826,6 +903,15 @@ pub struct BtfParam {
     pub btf_type: u32,
 }
 
+impl BtfParam {
+    pub const fn new(name_offset: u32, btf_type: u32) -> Self {
+        Self {
+            name_offset,
+            btf_type,
+        }
+    }
+}
+
 #[repr(C)]
 #[derive(Clone, Debug)]
 pub struct FuncProto {
@@ -836,6 +922,14 @@ pub struct FuncProto {
 }
 
 impl FuncProto {
+    pub const fn return_type(&self) -> u32 {
+        self.return_type
+    }
+
+    pub fn params(&self) -> &[BtfParam] {
+        &self.params
+    }
+
     pub(crate) fn to_bytes(&self) -> Vec<u8> {
         let Self {
             name_offset,
@@ -1308,7 +1402,13 @@ impl BtfType {
         }
     }
 
-    pub(crate) const fn size(&self) -> Option<u32> {
+    /// Returns the declared byte size.
+    ///
+    /// Returns `None` for kinds without a declared size. This includes pointers, whose width is
+    /// a property of the target rather than of the type; use [`Btf::type_size`] to resolve it.
+    ///
+    /// [`Btf::type_size`]: crate::btf::Btf::type_size
+    pub const fn size(&self) -> Option<u32> {
         match self {
             Self::Int(t) => Some(t.size),
             Self::Float(t) => Some(t.size),
@@ -1317,12 +1417,11 @@ impl BtfType {
             Self::Struct(t) => Some(t.size),
             Self::Union(t) => Some(t.size),
             Self::DataSec(t) => Some(t.size),
-            Self::Ptr(_) => Some(size_of::<&()>() as u32),
             _ => None,
         }
     }
 
-    pub(crate) const fn btf_type(&self) -> Option<u32> {
+    pub const fn btf_type(&self) -> Option<u32> {
         match self {
             Self::Const(t) => Some(t.btf_type),
             Self::Volatile(t) => Some(t.btf_type),
@@ -1363,7 +1462,7 @@ impl BtfType {
         }
     }
 
-    pub(crate) const fn name_offset(&self) -> u32 {
+    pub const fn name_offset(&self) -> u32 {
         match self {
             Self::Unknown => 0,
             Self::Fwd(t) => t.name_offset,
@@ -1388,7 +1487,7 @@ impl BtfType {
         }
     }
 
-    pub(crate) const fn kind(&self) -> BtfKind {
+    pub const fn kind(&self) -> BtfKind {
         match self {
             Self::Unknown => BtfKind::Unknown,
             Self::Fwd(t) => t.kind(),
@@ -1417,15 +1516,17 @@ impl BtfType {
         matches!(self, Self::Struct(_) | Self::Union(_))
     }
 
-    pub(crate) fn members(&self) -> Option<impl Iterator<Item = &BtfMember>> {
+    /// Returns the members of a struct or union.
+    pub fn members(&self) -> Option<&[BtfMember]> {
         match self {
-            Self::Struct(t) => Some(t.members.iter()),
-            Self::Union(t) => Some(t.members.iter()),
+            Self::Struct(t) => Some(t.members()),
+            Self::Union(t) => Some(t.members()),
             _ => None,
         }
     }
 
-    pub(crate) const fn member_bit_field_size(&self, member: &BtfMember) -> Option<usize> {
+    /// Decodes the member's bitfield width using this struct or union's kind flag.
+    pub const fn member_bit_field_size(&self, member: &BtfMember) -> Option<usize> {
         match self {
             Self::Struct(t) => Some(t.member_bit_field_size(member)),
             Self::Union(t) => Some(t.member_bit_field_size(member)),
@@ -1433,7 +1534,8 @@ impl BtfType {
         }
     }
 
-    pub(crate) const fn member_bit_offset(&self, member: &BtfMember) -> Option<usize> {
+    /// Decodes the member's bit offset using this struct or union's kind flag.
+    pub const fn member_bit_offset(&self, member: &BtfMember) -> Option<usize> {
         match self {
             Self::Struct(t) => Some(t.member_bit_offset(member)),
             Self::Union(t) => Some(t.member_bit_offset(member)),
@@ -1601,6 +1703,53 @@ mod tests {
     use assert_matches::assert_matches;
 
     use super::*;
+
+    #[test]
+    fn read_only_members_decode_containing_kind_flag() {
+        let member = BtfMember {
+            name_offset: 1,
+            btf_type: 2,
+            offset: (7 << 24) | 16,
+        };
+        for flagged in [false, true] {
+            let mut structure = Struct::new(0, vec![member.clone()], 4);
+            let mut union = Union::new(0, 4, vec![member.clone()], None);
+            if flagged {
+                structure.info |= 1 << 31;
+                union.info |= 1 << 31;
+            }
+            assert_eq!(structure.members().len(), 1);
+            assert_eq!(union.members().len(), 1);
+            for ty in [BtfType::Struct(structure), BtfType::Union(union)] {
+                let field = &ty.members().unwrap()[0];
+                assert_eq!(field.name_offset(), 1);
+                assert_eq!(field.btf_type(), 2);
+                assert_eq!(field.offset(), (7 << 24) | 16);
+                assert_eq!(
+                    ty.member_bit_offset(field),
+                    Some(if flagged { 16 } else { member.offset as usize })
+                );
+                assert_eq!(
+                    ty.member_bit_field_size(field),
+                    Some(if flagged { 7 } else { 0 })
+                );
+            }
+        }
+        let scalar = BtfType::Int(Int::new(0, 4, IntEncoding::Signed, 0));
+        assert!(scalar.members().is_none());
+        assert_eq!(scalar.member_bit_offset(&member), None);
+        assert_eq!(scalar.member_bit_field_size(&member), None);
+        assert_eq!(scalar.size(), Some(4));
+        assert_matches!(scalar, BtfType::Int(ty) => {
+            assert_eq!(ty.encoding(), IntEncoding::Signed);
+            assert_eq!(ty.offset(), 0);
+            assert_eq!(ty.bits(), 32);
+        });
+        let enumeration = Enum64::new(0, true, vec![BtfEnum64::new(1, u64::MAX)]);
+        assert!(enumeration.is_signed());
+        assert_eq!(enumeration.variants()[0].name_offset(), 1);
+        assert_eq!(enumeration.variants()[0].value(), u64::MAX);
+    }
 
     #[test]
     fn test_read_btf_type_int() {
