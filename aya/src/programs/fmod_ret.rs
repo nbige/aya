@@ -17,13 +17,15 @@ use crate::programs::{
 /// [`fmod_ret`](https://docs.rs/aya-ebpf/latest/aya_ebpf/macros/attr.fmod_ret.html)
 /// macro sign-extends `i32` results to preserve negative errors for `long` targets.
 /// Attached fexit programs still run and see that return value. The target must
-/// support return modification: for ordinary kernel functions this means an
-/// error-injection annotation or a `security_` name.
+/// support return modification through an entry in the error-injection list, a
+/// registration in a BTF fmodret ID set, or a `security_` name. BTF fmodret ID sets
+/// are supported from Linux 6.2. Error-injection annotations populate the list only
+/// when `CONFIG_FUNCTION_ERROR_INJECTION` is enabled.
 /// Other verifier and trampoline restrictions still apply.
 ///
 /// These rules are not documented by the kernel; see
 /// [`invoke_bpf_mod_ret`](https://github.com/torvalds/linux/blob/0c3836482/arch/x86/net/bpf_jit_comp.c#L2678-L2713)
-/// and [`check_attach_modify_return`](https://github.com/torvalds/linux/blob/0c3836482/kernel/bpf/verifier.c#L21106-L21115).
+/// and the [target eligibility checks](https://github.com/torvalds/linux/blob/7d0a66e4b/kernel/bpf/verifier.c#L23830-L23844).
 /// Section names are documented in the [kernel's program type table].
 ///
 /// [kernel's program type table]: https://docs.kernel.org/bpf/libbpf/program_types.html
