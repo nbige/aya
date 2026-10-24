@@ -24,6 +24,26 @@ fn fmod_ret_overrides_or_runs_the_target_and_preserves_fexit() {
     let mut bpf = Ebpf::load(crate::FMOD_RET).unwrap();
     let mut control: Array<_, i32> = bpf.take_map("CONTROL").unwrap().try_into().unwrap();
     let mut results: Array<_, i32> = bpf.take_map("RESULTS").unwrap().try_into().unwrap();
+    let modifier: &mut FModRet = bpf
+        .program_mut("modify_return")
+        .unwrap()
+        .try_into()
+        .unwrap();
+    let config = procfs::kernel_config().unwrap();
+    let result = modifier.load("bpf_modify_return_test", &btf);
+    // Linux 6.2 registers this target in a BTF fmodret ID set independently of error injection.
+    if version < KernelVersion::new(6, 2, 0)
+        && !matches!(
+            config.get("CONFIG_FUNCTION_ERROR_INJECTION"),
+            Some(procfs::ConfigSetting::Yes)
+        )
+    {
+        assert_matches!(result, Err(ProgramError::LoadError { io_error, .. }) => {
+            assert_eq!(io_error.raw_os_error(), Some(libc::EINVAL));
+        });
+        return;
+    }
+    result.unwrap();
     let observer: &mut FExit = bpf
         .program_mut("observe_return")
         .unwrap()
@@ -48,7 +68,6 @@ fn fmod_ret_overrides_or_runs_the_target_and_preserves_fexit() {
         .unwrap()
         .try_into()
         .unwrap();
-    modifier.load("bpf_modify_return_test", &btf).unwrap();
     let result = modifier.attach();
     if !attach_supported {
         assert_matches!(result, Err(ProgramError::SyscallError(SyscallError { call, io_error })) => {
