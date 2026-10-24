@@ -581,8 +581,15 @@ fn match_candidate<'target>(
                         type_id: target_id,
                         name: None,
                     });
-                    target_spec.bit_offset +=
-                        accessor.index * candidate.btf.type_size(target_id)? * 8;
+                    let bit_offset = accessor
+                        .index
+                        .checked_mul(candidate.btf.type_size(target_id)?)
+                        .and_then(|offset| offset.checked_mul(8))
+                        .ok_or(BtfError::InvalidTypeInfo)?;
+                    target_spec.bit_offset = target_spec
+                        .bit_offset
+                        .checked_add(bit_offset)
+                        .ok_or(BtfError::InvalidTypeInfo)?;
                 }
             }
             Ok(Some(target_spec))
@@ -611,8 +618,8 @@ fn match_member<'target>(
     let target_id = target_btf.resolve_type(target_id)?;
     let target_ty = target_btf.type_by_id(target_id)?;
 
-    let target_members: Vec<&BtfMember> = match target_ty.members() {
-        Some(members) => members.collect(),
+    let target_members: &[BtfMember] = match target_ty.members() {
+        Some(members) => members,
         // not a fields type, no match
         None => return Ok(None),
     };
@@ -639,7 +646,10 @@ fn match_member<'target>(
                 target_spec,
             )?;
             if ret.is_some() {
-                target_spec.bit_offset += bit_offset;
+                target_spec.bit_offset = target_spec
+                    .bit_offset
+                    .checked_add(bit_offset)
+                    .ok_or(BtfError::InvalidTypeInfo)?;
                 target_spec.parts.push(index);
                 return Ok(ret);
             }
@@ -650,7 +660,10 @@ fn match_member<'target>(
                 target_btf,
                 target_member.btf_type,
             )? {
-                target_spec.bit_offset += bit_offset;
+                target_spec.bit_offset = target_spec
+                    .bit_offset
+                    .checked_add(bit_offset)
+                    .ok_or(BtfError::InvalidTypeInfo)?;
                 target_spec.parts.push(index);
                 target_spec.accessors.push(Accessor {
                     type_id: target_id,
@@ -800,7 +813,10 @@ impl<'a> AccessSpec<'a> {
                 };
                 let mut accessors = Vec::new();
                 let size = btf.type_size(type_id)?;
-                let mut bit_offset = accessor.index * size;
+                let mut bit_offset = accessor
+                    .index
+                    .checked_mul(size)
+                    .ok_or(BtfError::InvalidTypeInfo)?;
                 for index in parts.iter().skip(1).copied() {
                     type_id = btf.resolve_type(type_id)?;
                     let ty = btf.type_by_id(type_id)?;
@@ -823,7 +839,9 @@ impl<'a> AccessSpec<'a> {
                             }
 
                             let member = &members[index];
-                            bit_offset += ty.member_bit_offset(member).unwrap();
+                            bit_offset = bit_offset
+                                .checked_add(ty.member_bit_offset(member).unwrap())
+                                .ok_or(BtfError::InvalidTypeInfo)?;
 
                             let next_accessor = if member.name_offset != 0 {
                                 let name = btf.string_at(member.name_offset)?;
@@ -857,7 +875,13 @@ impl<'a> AccessSpec<'a> {
                                 });
                             }
                             let size = btf.type_size(type_id)?;
-                            bit_offset += index * size * 8;
+                            let offset = index
+                                .checked_mul(size)
+                                .and_then(|offset| offset.checked_mul(8))
+                                .ok_or(BtfError::InvalidTypeInfo)?;
+                            bit_offset = bit_offset
+                                .checked_add(offset)
+                                .ok_or(BtfError::InvalidTypeInfo)?;
                             Some(Accessor {
                                 type_id,
                                 index,
@@ -1208,7 +1232,8 @@ impl ComputedRelocation {
             return match rel.kind {
                 RelocationKind::FieldByteOffset => Ok(ComputedRelocationValue {
                     value: (spec.bit_offset / 8) as u64,
-                    size: spec.btf.type_size(accessor.type_id)? as u32,
+                    size: u32::try_from(spec.btf.type_size(accessor.type_id)?)
+                        .map_err(|_error| BtfError::InvalidTypeInfo)?,
                     type_id: Some(accessor.type_id),
                 }),
                 RelocationKind::FieldByteSize => Ok(ComputedRelocationValue {
@@ -1242,7 +1267,7 @@ impl ComputedRelocation {
             }
         };
 
-        let bit_off = spec.bit_offset as u32;
+        let bit_off = u32::try_from(spec.bit_offset).map_err(|_error| BtfError::InvalidTypeInfo)?;
         let member_type_id = spec.btf.resolve_type(member.btf_type)?;
         let member_ty = spec.btf.type_by_id(member_type_id)?;
 
@@ -1252,7 +1277,7 @@ impl ComputedRelocation {
         let is_bitfield = bit_size > 0;
         if is_bitfield {
             // find out the smallest int size to load the bitfield
-            byte_size = member_ty.size().unwrap();
+            byte_size = member_ty.size().ok_or(BtfError::InvalidTypeInfo)?;
             byte_off = bit_off / 8 / byte_size * byte_size;
             while bit_off + bit_size - byte_off * 8 > byte_size * 8 {
                 if byte_size >= 8 {
@@ -1263,9 +1288,10 @@ impl ComputedRelocation {
                 byte_off = bit_off / 8 / byte_size * byte_size;
             }
         } else {
-            byte_size = spec.btf.type_size(member_type_id)? as u32;
-            bit_size = byte_size * 8;
-            byte_off = spec.bit_offset as u32 / 8;
+            byte_size = u32::try_from(spec.btf.type_size(member_type_id)?)
+                .map_err(|_error| BtfError::InvalidTypeInfo)?;
+            bit_size = byte_size.checked_mul(8).ok_or(BtfError::InvalidTypeInfo)?;
+            byte_off = bit_off / 8;
         }
 
         let mut value = ComputedRelocationValue {
@@ -1350,5 +1376,140 @@ impl ComputedRelocation {
             size: 0,
             type_id: None,
         })
+    }
+}
+
+#[cfg(test)]
+#[cfg(target_pointer_width = "64")]
+mod tests {
+    use super::*;
+    use crate::btf::Int;
+
+    #[test]
+    fn field_relocation_rejects_array_size_above_u32() {
+        let mut btf = Btf::new();
+        let scalar = btf.add_type(BtfType::Int(Int::new(0, 8, IntEncoding::None, 0)));
+        let array = btf.add_type(BtfType::Array(Array::new(0, scalar, scalar, 1 << 30)));
+        assert_eq!(btf.type_size(array).unwrap(), 1usize << 33);
+        let rel = Relocation {
+            kind: RelocationKind::FieldByteOffset,
+            ins_offset: 0,
+            type_id: array,
+            access_str_offset: 0,
+            number: 0,
+        };
+        let spec = AccessSpec::new(&btf, array, "0", rel).unwrap();
+        assert!(matches!(
+            ComputedRelocation::compute_field_relocation(&rel, Some(&spec)),
+            Err(RelocationError::BtfError(BtfError::InvalidTypeInfo))
+        ));
+    }
+
+    #[test]
+    fn field_relocation_rejects_member_size_overflow() {
+        for len in [1 << 30, 1 << 26] {
+            let mut btf = Btf::new();
+            let scalar = btf.add_type(BtfType::Int(Int::new(0, 8, IntEncoding::None, 0)));
+            let array = btf.add_type(BtfType::Array(Array::new(0, scalar, scalar, len)));
+            let name = btf.add_string("field");
+            let structure = btf.add_type(BtfType::Struct(Struct::new(
+                0,
+                vec![BtfMember {
+                    name_offset: name,
+                    btf_type: array,
+                    offset: 0,
+                }],
+                8,
+            )));
+            for kind in [
+                RelocationKind::FieldByteOffset,
+                RelocationKind::FieldByteSize,
+            ] {
+                let rel = Relocation {
+                    kind,
+                    ins_offset: 0,
+                    type_id: structure,
+                    access_str_offset: 0,
+                    number: 0,
+                };
+                let spec = AccessSpec::new(&btf, structure, "0:0", rel).unwrap();
+                assert!(matches!(
+                    ComputedRelocation::compute_field_relocation(&rel, Some(&spec)),
+                    Err(RelocationError::BtfError(BtfError::InvalidTypeInfo))
+                ));
+            }
+        }
+    }
+
+    #[test]
+    fn access_spec_rejects_type_size_multiplication_overflow() {
+        let mut btf = Btf::new();
+        let scalar = btf.add_type(BtfType::Int(Int::new(0, 8, IntEncoding::None, 0)));
+        let array = btf.add_type(BtfType::Array(Array::new(0, scalar, scalar, 1 << 30)));
+        let rel = Relocation {
+            kind: RelocationKind::FieldByteOffset,
+            ins_offset: 0,
+            type_id: array,
+            access_str_offset: 0,
+            number: 0,
+        };
+        assert!(matches!(
+            AccessSpec::new(&btf, array, &usize::MAX.to_string(), rel),
+            Err(RelocationError::BtfError(BtfError::InvalidTypeInfo))
+        ));
+
+        let flex = btf.add_type(BtfType::Array(Array::new(0, array, scalar, 0)));
+        let name = btf.add_string("field");
+        let structure = btf.add_type(BtfType::Struct(Struct::new(
+            0,
+            vec![BtfMember {
+                name_offset: name,
+                btf_type: flex,
+                offset: 0,
+            }],
+            8,
+        )));
+        let rel = Relocation {
+            type_id: structure,
+            ..rel
+        };
+        for index in [usize::MAX, usize::MAX / btf.type_size(array).unwrap()] {
+            assert!(matches!(
+                AccessSpec::new(&btf, structure, &format!("0:0:{index}"), rel),
+                Err(RelocationError::BtfError(BtfError::InvalidTypeInfo))
+            ));
+        }
+    }
+
+    #[test]
+    fn match_candidate_rejects_type_size_multiplication_overflow() {
+        let mut local_btf = Btf::new();
+        let local = local_btf.add_type(BtfType::Int(Int::new(0, 1, IntEncoding::None, 0)));
+        let mut target_btf = Btf::new();
+        let scalar = target_btf.add_type(BtfType::Int(Int::new(0, 8, IntEncoding::None, 0)));
+        let array = target_btf.add_type(BtfType::Array(Array::new(0, scalar, scalar, 1 << 30)));
+        let candidate = Candidate {
+            name: "array".to_string(),
+            btf: &target_btf,
+            _ty: target_btf.type_by_id(array).unwrap(),
+            type_id: array,
+        };
+        let rel = Relocation {
+            kind: RelocationKind::FieldByteOffset,
+            ins_offset: 0,
+            type_id: local,
+            access_str_offset: 0,
+            number: 0,
+        };
+        for index in [
+            usize::MAX,
+            usize::MAX / target_btf.type_size(array).unwrap(),
+        ] {
+            let spec = AccessSpec::new(&local_btf, local, &index.to_string(), rel).unwrap();
+            assert!(matches!(
+                match_candidate(&spec, &candidate),
+                Err(RelocationError::BtfError(BtfError::InvalidTypeInfo))
+            ));
+        }
     }
 }

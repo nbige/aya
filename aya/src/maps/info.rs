@@ -354,6 +354,48 @@ pub enum MapType {
     InsnArray = bpf_map_type::BPF_MAP_TYPE_INSN_ARRAY as isize,
 }
 
+impl From<MapType> for bpf_map_type {
+    fn from(map_type: MapType) -> Self {
+        match map_type {
+            MapType::Unspecified => Self::BPF_MAP_TYPE_UNSPEC,
+            MapType::Hash => Self::BPF_MAP_TYPE_HASH,
+            MapType::Array => Self::BPF_MAP_TYPE_ARRAY,
+            MapType::ProgramArray => Self::BPF_MAP_TYPE_PROG_ARRAY,
+            MapType::PerfEventArray => Self::BPF_MAP_TYPE_PERF_EVENT_ARRAY,
+            MapType::PerCpuHash => Self::BPF_MAP_TYPE_PERCPU_HASH,
+            MapType::PerCpuArray => Self::BPF_MAP_TYPE_PERCPU_ARRAY,
+            MapType::StackTrace => Self::BPF_MAP_TYPE_STACK_TRACE,
+            MapType::CgroupArray => Self::BPF_MAP_TYPE_CGROUP_ARRAY,
+            MapType::LruHash => Self::BPF_MAP_TYPE_LRU_HASH,
+            MapType::LruPerCpuHash => Self::BPF_MAP_TYPE_LRU_PERCPU_HASH,
+            MapType::LpmTrie => Self::BPF_MAP_TYPE_LPM_TRIE,
+            MapType::ArrayOfMaps => Self::BPF_MAP_TYPE_ARRAY_OF_MAPS,
+            MapType::HashOfMaps => Self::BPF_MAP_TYPE_HASH_OF_MAPS,
+            MapType::DevMap => Self::BPF_MAP_TYPE_DEVMAP,
+            MapType::SockMap => Self::BPF_MAP_TYPE_SOCKMAP,
+            MapType::CpuMap => Self::BPF_MAP_TYPE_CPUMAP,
+            MapType::XskMap => Self::BPF_MAP_TYPE_XSKMAP,
+            MapType::SockHash => Self::BPF_MAP_TYPE_SOCKHASH,
+            MapType::CgroupStorage => Self::BPF_MAP_TYPE_CGROUP_STORAGE_DEPRECATED,
+            MapType::ReuseportSockArray => Self::BPF_MAP_TYPE_REUSEPORT_SOCKARRAY,
+            MapType::PerCpuCgroupStorage => Self::BPF_MAP_TYPE_PERCPU_CGROUP_STORAGE_DEPRECATED,
+            MapType::Queue => Self::BPF_MAP_TYPE_QUEUE,
+            MapType::Stack => Self::BPF_MAP_TYPE_STACK,
+            MapType::SkStorage => Self::BPF_MAP_TYPE_SK_STORAGE,
+            MapType::DevMapHash => Self::BPF_MAP_TYPE_DEVMAP_HASH,
+            MapType::StructOps => Self::BPF_MAP_TYPE_STRUCT_OPS,
+            MapType::RingBuf => Self::BPF_MAP_TYPE_RINGBUF,
+            MapType::InodeStorage => Self::BPF_MAP_TYPE_INODE_STORAGE,
+            MapType::TaskStorage => Self::BPF_MAP_TYPE_TASK_STORAGE,
+            MapType::BloomFilter => Self::BPF_MAP_TYPE_BLOOM_FILTER,
+            MapType::UserRingBuf => Self::BPF_MAP_TYPE_USER_RINGBUF,
+            MapType::CgrpStorage => Self::BPF_MAP_TYPE_CGRP_STORAGE,
+            MapType::Arena => Self::BPF_MAP_TYPE_ARENA,
+            MapType::InsnArray => Self::BPF_MAP_TYPE_INSN_ARRAY,
+        }
+    }
+}
+
 impl TryFrom<bpf_map_type> for MapType {
     type Error = MapError;
 
@@ -402,5 +444,21 @@ impl TryFrom<bpf_map_type> for MapType {
                 });
             }
         })
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use aya_obj::generated::bpf_map_type;
+
+    use super::MapType;
+
+    #[test]
+    fn map_type_converts_to_the_matching_kernel_type() {
+        for raw in 0..bpf_map_type::__MAX_BPF_MAP_TYPE as u32 {
+            let kernel = bpf_map_type::try_from(raw).ok().unwrap();
+            let map_type = MapType::try_from(kernel).ok().unwrap();
+            assert_eq!(bpf_map_type::from(map_type) as u32, raw, "{map_type:?}");
+        }
     }
 }

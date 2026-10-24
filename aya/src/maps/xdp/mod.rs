@@ -23,3 +23,12 @@ pub enum XdpMapError {
     #[error(transparent)]
     MapError(#[from] MapError),
 }
+
+/// Returns whether the map's values have the chained-program layout `V`.
+///
+/// The kernel accepts this larger value only when it supports chained programs, so the map's
+/// own value size decides the layout. This holds for maps created by any process, including
+/// maps opened from a pin, an id, or a received descriptor.
+const fn has_chained_program<V>(map: &super::MapData) -> bool {
+    map.obj.value_size() as usize == size_of::<V>()
+}
