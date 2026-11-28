@@ -2,6 +2,7 @@ use std::{
     borrow::Cow,
     collections::{HashMap, HashSet},
     fmt, fs, io, iter,
+    num::NonZeroU32,
     os::fd::{AsFd as _, AsRawFd as _},
     path::{Path, PathBuf},
     sync::Arc,
@@ -728,11 +729,10 @@ impl<'a> EbpfLoader<'a> {
         // Regular maps first, so they're available as inner maps below.
         for (name, mut map_obj, map_type) in regular_maps.into_iter().chain(maps_of_maps) {
             let num_cpus = || {
-                let num_cpus = nr_cpus().map_err(|(path, error)| EbpfError::FileError {
+                nr_cpus().map_err(|(path, error)| EbpfError::FileError {
                     path: PathBuf::from(path),
                     error,
-                })?;
-                Ok(num_cpus as u32)
+                })
             };
             let max_entries_val = max_entries_override(
                 map_type,
@@ -1113,12 +1113,15 @@ fn max_entries_override(
     map_type: bpf_map_type,
     user_override: Option<u32>,
     current_value: impl Fn() -> u32,
-    num_cpus: impl Fn() -> Result<u32, EbpfError>,
+    num_cpus: impl FnOnce() -> Result<NonZeroU32, EbpfError>,
     page_size: impl Fn() -> u32,
 ) -> Result<Option<u32>, EbpfError> {
     let max_entries = || user_override.unwrap_or_else(&current_value);
     Ok(match map_type {
-        bpf_map_type::BPF_MAP_TYPE_PERF_EVENT_ARRAY if max_entries() == 0 => Some(num_cpus()?),
+        bpf_map_type::BPF_MAP_TYPE_PERF_EVENT_ARRAY if max_entries() == 0 => {
+            let num_cpus = num_cpus()?;
+            Some(num_cpus.get())
+        }
         bpf_map_type::BPF_MAP_TYPE_RINGBUF => Some(adjust_to_page_size(max_entries(), page_size()))
             .filter(|adjusted| *adjusted != max_entries())
             .or(user_override),
@@ -1162,12 +1165,15 @@ const fn adjust_to_page_size(byte_size: u32, page_size: u32) -> u32 {
 
 #[cfg(test)]
 mod tests {
-    use aya_obj::generated::bpf_map_type::*;
+    use std::num::NonZeroU32;
+
+    use aya_obj::generated::{bpf_map_type, bpf_map_type::*};
+    use rstest::rstest;
 
     use super::{Btf, BtfSource, EbpfLoader, TargetBtf};
 
     const PAGE_SIZE: u32 = 4096;
-    const NUM_CPUS: u32 = 4;
+    const NUM_CPUS: NonZeroU32 = NonZeroU32::new(4).unwrap();
 
     #[test]
     fn test_adjust_to_page_size() {
@@ -1194,8 +1200,13 @@ mod tests {
             (BPF_MAP_TYPE_RINGBUF, None, PAGE_SIZE, None),
             (BPF_MAP_TYPE_PERF_EVENT_ARRAY, None, 1, None),
             (BPF_MAP_TYPE_PERF_EVENT_ARRAY, Some(42), 1, Some(42)),
-            (BPF_MAP_TYPE_PERF_EVENT_ARRAY, Some(0), 1, Some(NUM_CPUS)),
-            (BPF_MAP_TYPE_PERF_EVENT_ARRAY, None, 0, Some(NUM_CPUS)),
+            (
+                BPF_MAP_TYPE_PERF_EVENT_ARRAY,
+                Some(0),
+                1,
+                Some(NUM_CPUS.get()),
+            ),
+            (BPF_MAP_TYPE_PERF_EVENT_ARRAY, None, 0, Some(NUM_CPUS.get())),
             (BPF_MAP_TYPE_PERF_EVENT_ARRAY, None, 42, None),
             (BPF_MAP_TYPE_ARRAY, None, 1, None),
             (BPF_MAP_TYPE_ARRAY, Some(2), 1, Some(2)),
@@ -1212,6 +1223,24 @@ mod tests {
                 .unwrap()
             );
         }
+    }
+
+    #[rstest]
+    fn test_lru_max_entries_without_cpu_count(
+        #[values(BPF_MAP_TYPE_LRU_HASH, BPF_MAP_TYPE_LRU_PERCPU_HASH)] map_type: bpf_map_type,
+        #[values(None, Some(7))] user_override: Option<u32>,
+    ) {
+        assert_eq!(
+            super::max_entries_override(
+                map_type,
+                user_override,
+                || 5,
+                || panic!("map creation must not require the CPU count"),
+                || PAGE_SIZE,
+            )
+            .unwrap(),
+            user_override,
+        );
     }
 
     #[test]

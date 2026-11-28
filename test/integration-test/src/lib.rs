@@ -70,6 +70,7 @@ bpf_file!(
     LINEAR_DATA_STRUCTURES => "linear-data-structures",
     LOG => "log",
     LPM_TRIE => "lpm-trie",
+    MAP_REUSE => "map-reuse",
     MAP_TEST => "map-test",
     MEMMOVE_TEST => "memmove-test",
     MULTIMAP => "multimap",

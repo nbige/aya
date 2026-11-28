@@ -77,6 +77,10 @@ name = "lpm-trie"
 path = "src/lpm_trie.rs"
 
 [[bin]]
+name = "map-reuse"
+path = "src/map_reuse.rs"
+
+[[bin]]
 name = "map-test"
 path = "src/map_test.rs"
 
